@@ -1,0 +1,157 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/services/auth_state.dart';
+import '../../core/services/mock_api_service.dart';
+import '../../models/user.dart';
+import '../../models/cat.dart';
+import '../../screens/widgets/input_field.dart';
+import '../../screens/widgets/primary_button.dart';
+
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
+
+  @override
+  State<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends State<RegisterScreen> {
+  final TextEditingController _firstName = TextEditingController();
+  final TextEditingController _lastName = TextEditingController();
+  final TextEditingController _email = TextEditingController();
+  final TextEditingController _password = TextEditingController();
+  final TextEditingController _phone = TextEditingController();
+  final TextEditingController _catName = TextEditingController();
+  final TextEditingController _catImageUrl = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final MockApiService _api = MockApiService();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _firstName.dispose();
+    _lastName.dispose();
+    _email.dispose();
+    _password.dispose();
+    _phone.dispose();
+    _catName.dispose();
+    _catImageUrl.dispose();
+    super.dispose();
+  }
+
+  String? _required(String? v) =>
+      (v == null || v.trim().isEmpty) ? 'Requis' : null;
+  String? _emailFmt(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Requis';
+    final r = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    return r.hasMatch(v.trim()) ? null : 'Email invalide';
+  }
+
+  String? _pwd(String? v) =>
+      (v == null || v.length < 8) ? '8 caractères minimum' : null;
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _submitting = true);
+
+    final user = User(
+      id: UniqueKey().toString(),
+      name: '${_firstName.text.trim()} ${_lastName.text.trim()}',
+      email: _email.text.trim(),
+    );
+    final cat = Cat(
+      id: UniqueKey().toString(),
+      name: _catName.text.trim(),
+      ageMonths: 0,
+      breed: null,
+    );
+
+    final ok = await _api.register(user);
+    setState(() => _submitting = false);
+    if (ok) {
+      await AuthState.instance.setLoggedIn(true);
+      if (!mounted) return;
+      context.go('/settings/notifications');
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Echec de l'inscription")),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Créer un compte')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 24),
+                Center(
+                  child: Icon(Icons.pets,
+                      size: 56, color: Theme.of(context).colorScheme.primary),
+                ),
+                const SizedBox(height: 24),
+                TextFormField(
+                  controller: _firstName,
+                  decoration: const InputDecoration(labelText: 'Prénom'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _lastName,
+                  decoration: const InputDecoration(labelText: 'Nom'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  validator: _emailFmt,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _password,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Mot de passe'),
+                  validator: _pwd,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Téléphone'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _catName,
+                  decoration: const InputDecoration(labelText: 'Nom du chat'),
+                  validator: _required,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _catImageUrl,
+                  decoration: const InputDecoration(
+                      labelText: "URL image du chat (optionnel)"),
+                ),
+                const SizedBox(height: 20),
+                PrimaryButton(
+                  text: _submitting ? 'Création...' : 'Créer et configurer',
+                  onPressed: _submitting ? null : _submit,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

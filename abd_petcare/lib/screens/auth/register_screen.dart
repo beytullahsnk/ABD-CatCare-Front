@@ -26,6 +26,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final MockApiService _api = MockApiService();
   bool _submitting = false;
+  bool _obscure = true;
 
   @override
   void dispose() {
@@ -119,8 +120,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _password,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Mot de passe'),
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    labelText: 'Mot de passe',
+                    suffixIcon: IconButton(
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                      icon: Icon(
+                          _obscure ? Icons.visibility : Icons.visibility_off),
+                    ),
+                  ),
                   validator: _pwd,
                 ),
                 const SizedBox(height: 12),
@@ -143,9 +151,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       labelText: "URL image du chat (optionnel)"),
                 ),
                 const SizedBox(height: 20),
-                PrimaryButton(
-                  text: _submitting ? 'Création...' : 'Créer et configurer',
-                  onPressed: _submitting ? null : _submit,
+                Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    PrimaryButton(
+                      text: _submitting ? 'Création...' : 'Créer et configurer',
+                      onPressed: _submitting ? null : _submit,
+                    ),
+                    if (_submitting)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),

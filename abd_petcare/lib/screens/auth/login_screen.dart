@@ -19,11 +19,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final MockApiService _api = MockApiService();
   bool _submitting = false;
+  bool _obscure = true;
+
+  // Focus pour navigation clavier
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
 
   @override
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -51,8 +58,12 @@ class _LoginScreenState extends State<LoginScreen> {
       context.go('/dashboard');
     } else {
       if (!mounted) return;
+      final cs = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Identifiants invalides')),
+        SnackBar(
+          backgroundColor: cs.error,
+          content: const Text('Identifiants invalides'),
+        ),
       );
     }
   }
@@ -80,18 +91,47 @@ class _LoginScreenState extends State<LoginScreen> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(labelText: 'Email'),
                   validator: _validateEmail,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.email],
+                  focusNode: _emailFocus,
+                  onFieldSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_passwordFocus),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _password,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Mot de passe'),
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    labelText: 'Mot de passe',
+                    suffixIcon: IconButton(
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                      icon: Icon(
+                          _obscure ? Icons.visibility : Icons.visibility_off),
+                    ),
+                  ),
                   validator: _validatePassword,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.password],
+                  focusNode: _passwordFocus,
                 ),
                 const SizedBox(height: 20),
-                PrimaryButton(
-                  text: _submitting ? 'Connexion...' : 'Se connecter',
-                  onPressed: _submitting ? null : _submit,
+                Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    PrimaryButton(
+                      text: _submitting ? 'Connexion...' : 'Se connecter',
+                      onPressed: _submitting ? null : _submit,
+                    ),
+                    if (_submitting)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 TextButton(

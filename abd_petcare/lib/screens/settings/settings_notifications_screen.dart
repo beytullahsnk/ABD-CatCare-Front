@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/mock_api_service.dart';
+import '../../core/services/auth_state.dart';
 import '../../models/notification_prefs.dart';
 
 class SettingsNotificationsScreen extends StatefulWidget {
@@ -14,6 +15,7 @@ class _SettingsNotificationsScreenState
     extends State<SettingsNotificationsScreen> {
   final MockApiService _api = MockApiService();
   bool _loading = true;
+  bool _saving = false;
 
   bool _activity = true;
   bool _environment = true;
@@ -93,21 +95,65 @@ class _SettingsNotificationsScreenState
                   onChanged: (v) => setState(() => _channel = v ?? 'both'),
                 ),
                 const SizedBox(height: 24),
-                ElevatedButton(
+                Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    ElevatedButton(
+                      onPressed: _saving
+                          ? null
+                          : () async {
+                              setState(() => _saving = true);
+                              final prefs = NotificationPrefs(
+                                activity: _activity,
+                                environment: _environment,
+                                litter: _litter,
+                                channel: _channel,
+                              );
+                              await _api.saveNotificationPrefs(prefs);
+                              if (!mounted) return;
+                              final cs = Theme.of(context).colorScheme;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: cs.secondary,
+                                  content:
+                                      const Text('Préférences enregistrées'),
+                                ),
+                              );
+                              setState(() => _saving = false);
+                            },
+                      child: const Text('Enregistrer'),
+                    ),
+                    if (_saving)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Déconnexion rapide accessible depuis les paramètres
+                TextButton.icon(
                   onPressed: () async {
-                    final prefs = NotificationPrefs(
-                      activity: _activity,
-                      environment: _environment,
-                      litter: _litter,
-                      channel: _channel,
-                    );
-                    await _api.saveNotificationPrefs(prefs);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final cs = Theme.of(context).colorScheme;
+                    await AuthState.instance.setLoggedIn(false);
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Préférences enregistrées')),
+                    messenger.showSnackBar(
+                      SnackBar(
+                        backgroundColor: cs.secondary,
+                        content: const Text('Déconnecté'),
+                      ),
                     );
+                    if (!mounted) return;
+                    Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/login', (_) => false);
                   },
-                  child: const Text('Enregistrer'),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Se déconnecter'),
                 ),
               ],
             ),

@@ -7,6 +7,7 @@ class KpiCard extends StatelessWidget {
   final String label;
   final String value;
   final String status;
+  final String? subtitle;
 
   const KpiCard({
     super.key,
@@ -14,6 +15,7 @@ class KpiCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.status,
+    this.subtitle,
   });
 
   @override
@@ -64,13 +66,17 @@ class KpiCard extends StatelessWidget {
                       style: theme.textTheme.labelLarge
                           ?.copyWith(color: onContainer)),
                   const SizedBox(height: 6),
-                  Text(
-                    value,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: onContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  Text(value,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: onContainer,
+                        fontWeight: FontWeight.w700,
+                      )),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle!,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: onContainer)),
+                  ],
                 ],
               ),
             ],

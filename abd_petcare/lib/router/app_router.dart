@@ -6,6 +6,7 @@ import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/settings/settings_notifications_screen.dart';
+import '../screens/about/about_screen.dart';
 
 class AppRouter {
   AppRouter._();
@@ -59,6 +60,11 @@ class AppRouter {
         path: '/settings/notifications',
         name: 'settings_notifications',
         builder: (context, state) => const SettingsNotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/about',
+        name: 'about',
+        builder: (context, state) => const AboutScreen(),
       ),
     ],
   );

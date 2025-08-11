@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/services/mock_api_service.dart';
 import '../widgets/kpi_card.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/utils/status_utils.dart';
 
 /// Ecran tableau de bord
 /// - Récupère les métriques via MockApiService
@@ -17,11 +19,30 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   late Future<Map<String, dynamic>> _futureMetrics;
   final MockApiService _api = MockApiService();
+  List<Map<String, dynamic>> _alerts = const [];
 
   @override
   void initState() {
     super.initState();
     _futureMetrics = _api.fetchDashboardData();
+    _loadAlerts();
+  }
+
+  Future<void> _loadAlerts() async {
+    try {
+      final items = await _api.fetchAlerts();
+      if (!mounted) return;
+      setState(() => _alerts = items);
+    } catch (e) {
+      if (!mounted) return;
+      final cs = Theme.of(context).colorScheme;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            backgroundColor: cs.error,
+            content: const Text('Impossible de charger les alertes')),
+      );
+      setState(() => _alerts = const []);
+    }
   }
 
   Future<void> _refresh() async {
@@ -29,6 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _futureMetrics = _api.fetchDashboardData();
     });
     await _futureMetrics;
+    await _loadAlerts();
   }
 
   @override
@@ -39,10 +61,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         actions: [
           PopupMenuButton<String>(
             itemBuilder: (context) => const [
+              PopupMenuItem(value: 'about', child: Text('À propos')),
               PopupMenuItem(value: 'logout', child: Text('Se déconnecter')),
             ],
             onSelected: (value) async {
-              if (value == 'logout') {
+              if (value == 'about') {
+                if (!context.mounted) return;
+                context.go('/about');
+              } else if (value == 'logout') {
                 // Déconnexion simple
                 final messenger = ScaffoldMessenger.of(context);
                 final cs = Theme.of(context).colorScheme;
@@ -100,37 +126,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         KpiCard(
                           icon: Icons.thermostat,
                           label: 'Température',
-                          value: '${temperature.toStringAsFixed(1)} °C',
-                          status: (temperature < 36.0 || temperature > 39.0)
-                              ? 'alert'
-                              : 'ok',
+                          value: temperature.toStringAsFixed(1),
+                          subtitle: '°C',
+                          status: kpiStatusForTemp(temperature),
                         ),
                         KpiCard(
                           icon: Icons.water_drop,
                           label: 'Humidité',
-                          value: '$humidity %',
-                          status:
-                              (humidity < 30 || humidity > 60) ? 'warn' : 'ok',
+                          value: '$humidity',
+                          subtitle: '%',
+                          status: kpiStatusForHumidity(humidity),
                         ),
                         KpiCard(
-                          icon: Icons.directions_run,
+                          icon: Icons.pets,
                           label: 'Activité',
-                          value: '$activity %',
-                          status: (activity < 30) ? 'warn' : 'ok',
+                          value: '$activity',
+                          subtitle: '%',
+                          status: kpiStatusForActivity(activity),
                         ),
                         KpiCard(
-                          icon: Icons.inventory_2_outlined,
+                          icon: Icons.inventory_2,
                           label: 'Litière',
-                          value: '$litterHumidity % humidité',
-                          status: (litterHumidity > 50) ? 'alert' : 'ok',
+                          value: '$litterHumidity',
+                          subtitle: '% humidité',
+                          status: kpiStatusForLitterHumidity(litterHumidity),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
+                    const Text('Alertes récentes'),
+                    const SizedBox(height: 8),
+                    if (_alerts.isEmpty)
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              color: Theme.of(context).colorScheme.outline),
+                          const SizedBox(width: 8),
+                          const Text('Aucune alerte'),
+                        ],
+                      )
+                    else
+                      Column(
+                        children: _alerts
+                            .map((a) => ListTile(
+                                  leading: Icon(
+                                    a['level'] == 'warning'
+                                        ? Icons.warning_amber_rounded
+                                        : Icons.info_outline,
+                                    color: a['level'] == 'warning'
+                                        ? Theme.of(context).colorScheme.error
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .secondary,
+                                  ),
+                                  title: Text('${a['type']}'),
+                                  subtitle: Text('${a['message']}'),
+                                ))
+                            .toList(),
+                      ),
+                    const SizedBox(height: 24),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Dernière activité'),
-                      subtitle: Text(lastSeen.isEmpty ? '—' : lastSeen),
+                      subtitle: Text(
+                        lastSeen.isEmpty ? '—' : lastSeen.substring(11, 16),
+                      ),
                     ),
                   ],
                 );

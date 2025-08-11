@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/mock_api_service.dart';
+import '../../core/services/auth_state.dart';
 import '../widgets/kpi_card.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/status_utils.dart';
@@ -199,23 +200,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  /// Retourne les couleurs d'état (ok/alerte) basées sur le thème courant
-  _StatusColors _metricStatus({required bool isAlert}) {
-    final cs = Theme.of(context).colorScheme;
-    if (isAlert) {
-      return _StatusColors(
-        container: cs.errorContainer,
-        onContainer: cs.onErrorContainer,
-        icon: cs.error,
-      );
-    }
-    return _StatusColors(
-      container: cs.secondaryContainer,
-      onContainer: cs.onSecondaryContainer,
-      icon: cs.secondary,
     );
   }
 }

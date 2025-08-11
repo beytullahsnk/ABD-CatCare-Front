@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/services/mock_api_service.dart';
 import '../../core/services/auth_state.dart';
 import '../../models/notification_prefs.dart';
@@ -149,8 +150,8 @@ class _SettingsNotificationsScreenState
                       ),
                     );
                     if (!mounted) return;
-                    Navigator.of(context)
-                        .pushNamedAndRemoveUntil('/login', (_) => false);
+                    // Utilise go_router (MaterialApp.router)
+                    context.go('/login');
                   },
                   icon: const Icon(Icons.logout),
                   label: const Text('Se déconnecter'),

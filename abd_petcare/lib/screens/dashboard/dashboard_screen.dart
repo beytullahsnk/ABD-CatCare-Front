@@ -3,7 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/services/mock_api_service.dart';
 import '../../core/services/auth_state.dart';
-import '../widgets/kpi_card.dart';
+import '../widgets/section_header.dart';
+import '../widgets/metric_tile.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/status_utils.dart';
 
@@ -58,7 +59,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tableau de bord'),
+        title: const Text('Aperçu'),
         actions: [
           PopupMenuButton<String>(
             itemBuilder: (context) => const [
@@ -118,80 +119,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     (data['litterHumidity'] as num?)?.toInt() ?? 0;
                 final String lastSeen = data['lastSeen'] as String? ?? '';
 
+                final theme = Theme.of(context);
+                final cs = theme.colorScheme;
                 return ListView(
                   children: [
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        KpiCard(
-                          icon: Icons.thermostat,
-                          label: 'Température',
-                          value: temperature.toStringAsFixed(1),
-                          subtitle: '°C',
-                          status: kpiStatusForTemp(temperature),
-                        ),
-                        KpiCard(
-                          icon: Icons.water_drop,
-                          label: 'Humidité',
-                          value: '$humidity',
-                          subtitle: '%',
-                          status: kpiStatusForHumidity(humidity),
-                        ),
-                        KpiCard(
-                          icon: Icons.pets,
-                          label: 'Activité',
-                          value: '$activity',
-                          subtitle: '%',
-                          status: kpiStatusForActivity(activity),
-                        ),
-                        KpiCard(
-                          icon: Icons.inventory_2,
-                          label: 'Litière',
-                          value: '$litterHumidity',
-                          subtitle: '% humidité',
-                          status: kpiStatusForLitterHumidity(litterHumidity),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Alertes récentes'),
-                    const SizedBox(height: 8),
-                    if (_alerts.isEmpty)
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline,
-                              color: Theme.of(context).colorScheme.outline),
-                          const SizedBox(width: 8),
-                          const Text('Aucune alerte'),
-                        ],
-                      )
-                    else
-                      Column(
-                        children: _alerts
-                            .map((a) => ListTile(
-                                  leading: Icon(
-                                    a['level'] == 'warning'
-                                        ? Icons.warning_amber_rounded
-                                        : Icons.info_outline,
-                                    color: a['level'] == 'warning'
-                                        ? Theme.of(context).colorScheme.error
-                                        : Theme.of(context)
-                                            .colorScheme
-                                            .secondary,
-                                  ),
-                                  title: Text('${a['type']}'),
-                                  subtitle: Text('${a['message']}'),
-                                ))
-                            .toList(),
+                    const SectionHeader('État général'),
+                    Container(
+                      height: 180,
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer,
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    const SizedBox(height: 24),
+                      alignment: Alignment.center,
+                      child: Icon(Icons.pets,
+                          size: 100, color: cs.onPrimaryContainer),
+                    ),
+                    const SizedBox(height: 12),
+                    Text('OK',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    Text('Tout semble bien',
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: cs.onSurfaceVariant)),
+                    const SectionHeader('Dernière activité'),
+                    MetricTile(
+                        title: 'Dort',
+                        subtitle: lastSeen.isEmpty ? '—' : 'Il y a 1 heure',
+                        leadingIcon: Icons.bedtime),
+                    const SectionHeader('Environnement'),
+                    MetricTile(
+                        title: '${temperature.toStringAsFixed(0)}°C',
+                        subtitle: 'Température',
+                        leadingIcon: Icons.thermostat),
+                    MetricTile(
+                        title: '$humidity%',
+                        subtitle: 'Humidité',
+                        leadingIcon: Icons.water_drop),
+                    const SectionHeader('Bac à litière'),
+                    MetricTile(
+                        title: litterHumidity > kLitterHumidityHigh
+                            ? 'Humide'
+                            : 'Propre',
+                        subtitle: 'Humidité ${litterHumidity}%',
+                        leadingIcon: Icons.inventory_2),
+                    const SectionHeader('Alertes'),
+                    if (_alerts.isEmpty)
+                      MetricTile(
+                          title: 'Aucune alerte',
+                          subtitle: 'Tout est normal',
+                          leadingIcon: Icons.info_outline)
+                    else
+                      ..._alerts.map((a) => MetricTile(
+                            title: '${a['type']}',
+                            subtitle: '${a['message']}',
+                            leadingIcon: a['level'] == 'warning'
+                                ? Icons.warning_amber_rounded
+                                : Icons.info_outline,
+                          )),
+                    const SizedBox(height: 8),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Dernière activité'),
                       subtitle: Text(
-                        lastSeen.isEmpty ? '—' : lastSeen.substring(11, 16),
-                      ),
+                          lastSeen.isEmpty ? '—' : lastSeen.substring(11, 16)),
                     ),
                   ],
                 );

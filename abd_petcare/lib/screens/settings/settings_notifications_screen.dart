@@ -54,26 +54,48 @@ class _SettingsNotificationsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(title: const Text('Paramètres')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [
-                SwitchListTile(
-                  title: const Text('Activité'),
+                Text('Seuils',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                _SettingRow(
+                    icon: Icons.favorite_border,
+                    title: 'Activité',
+                    subtitle: "Seuil d’activité"),
+                _SettingRow(
+                    icon: Icons.device_thermostat,
+                    title: 'Litière',
+                    subtitle: 'Humidité et récurrence'),
+                _SettingRow(
+                    icon: Icons.tune,
+                    title: 'Environnement',
+                    subtitle: 'Température et humidité'),
+                const SizedBox(height: 16),
+                Text('Notifications',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                _SwitchRow(
+                  icon: Icons.notifications_none,
+                  title: 'Notifications pu…',
                   value: _activity,
                   onChanged: (v) => setState(() => _activity = v),
                 ),
-                SwitchListTile(
-                  title: const Text('Environnement'),
+                _SwitchRow(
+                  icon: Icons.mail_outline,
+                  title: 'Notifications par e‑mail',
                   value: _environment,
                   onChanged: (v) => setState(() => _environment = v),
-                ),
-                SwitchListTile(
-                  title: const Text('Litière'),
-                  value: _litter,
-                  onChanged: (v) => setState(() => _litter = v),
                 ),
                 const SizedBox(height: 16),
                 const Text('Canal de notification'),
@@ -158,6 +180,96 @@ class _SettingsNotificationsScreenState
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _SettingRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  const _SettingRow(
+      {required this.icon, required this.title, required this.subtitle});
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: cs.secondaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: cs.onSecondaryContainer),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(subtitle,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: cs.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 112,
+            height: 64,
+            decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(12)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _SwitchRow(
+      {required this.icon,
+      required this.title,
+      required this.value,
+      required this.onChanged});
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+                color: cs.secondaryContainer,
+                borderRadius: BorderRadius.circular(10)),
+            alignment: Alignment.center,
+            child: Icon(icon, color: cs.onSecondaryContainer, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+              child:
+                  Text(title, style: Theme.of(context).textTheme.titleMedium)),
+          const SizedBox(width: 12),
+          Switch(value: value, onChanged: onChanged),
+        ],
+      ),
     );
   }
 }

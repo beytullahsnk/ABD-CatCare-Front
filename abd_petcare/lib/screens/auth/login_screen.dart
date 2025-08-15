@@ -70,26 +70,43 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Connexion')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 24),
-                Center(
-                  child: Icon(Icons.pets,
-                      size: 56, color: Theme.of(context).colorScheme.primary),
+                // Bandeau image (placeholder)
+                Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  alignment: Alignment.center,
+                  child:
+                      Icon(Icons.pets, size: 100, color: cs.onPrimaryContainer),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
+                Text(
+                  'Bienvenue chez ABD PetCare',
+                  style: theme.textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 28),
+                Text('Courriel', style: theme.textTheme.labelLarge),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration:
+                      const InputDecoration(hintText: 'Entrez votre courriel'),
                   validator: _validateEmail,
                   textInputAction: TextInputAction.next,
                   autofillHints: const [AutofillHints.email],
@@ -97,12 +114,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   onFieldSubmitted: (_) =>
                       FocusScope.of(context).requestFocus(_passwordFocus),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
+                Text('Mot de passe', style: theme.textTheme.labelLarge),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _password,
                   obscureText: _obscure,
                   decoration: InputDecoration(
-                    labelText: 'Mot de passe',
+                    hintText: 'Entrez votre mot de passe',
                     suffixIcon: IconButton(
                       onPressed: () => setState(() => _obscure = !_obscure),
                       icon: Icon(
@@ -114,7 +133,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   autofillHints: const [AutofillHints.password],
                   focusNode: _passwordFocus,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () {},
+                    child: Text('Mot de passe oublié?',
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: cs.onSurfaceVariant)),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Stack(
                   alignment: Alignment.centerRight,
                   children: [
@@ -126,17 +155,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       const Padding(
                         padding: EdgeInsets.only(right: 12),
                         child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 TextButton(
                   onPressed: () => context.go('/register'),
-                  child: const Text('Créer un compte'),
+                  child: const Text("Vous n'avez pas de compte? S'inscrire"),
                 ),
               ],
             ),

@@ -5,7 +5,6 @@ import '../../core/services/auth_state.dart';
 import '../../core/services/mock_api_service.dart';
 import '../../models/user.dart';
 import '../../models/cat.dart';
-import '../../screens/widgets/input_field.dart';
 import '../../screens/widgets/primary_button.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -22,7 +21,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _password = TextEditingController();
   final TextEditingController _phone = TextEditingController();
   final TextEditingController _catName = TextEditingController();
-  final TextEditingController _catImageUrl = TextEditingController();
+  String? _selectedImagePath;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final MockApiService _api = MockApiService();
   bool _submitting = false;
@@ -36,7 +35,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _password.dispose();
     _phone.dispose();
     _catName.dispose();
-    _catImageUrl.dispose();
     super.dispose();
   }
 
@@ -79,6 +77,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SnackBar(content: Text("Echec de l'inscription")),
       );
     }
+  }
+
+  Widget _buildPlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.add_a_photo,
+          size: 32,
+          color: Theme.of(context).colorScheme.onSecondaryContainer,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Ajouter une photo',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSecondaryContainer,
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -145,10 +164,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   validator: _required,
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _catImageUrl,
-                  decoration: const InputDecoration(
-                      labelText: "URL image du chat (optionnel)"),
+                Text('Photo du chat',
+                    style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () {
+                    // TODO: Implémenter la sélection d'image
+                    // Pour l'instant, on simule une sélection
+                    setState(() {
+                      _selectedImagePath = 'assets/images/cat_placeholder.png';
+                    });
+                  },
+                  child: Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: _selectedImagePath != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(11),
+                            child: Image.asset(
+                              _selectedImagePath!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return _buildPlaceholder();
+                              },
+                            ),
+                          )
+                        : _buildPlaceholder(),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Stack(

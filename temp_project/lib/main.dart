@@ -1,4 +1,5 @@
 import 'package:abd_petcare/screens/dashboard/dashboard_screen.dart';
+import 'package:abd_petcare/screens/environnement/environment_page.dart';
 import 'package:flutter/material.dart';
 import 'screens/activity/activity_page.dart';
 import 'screens/litter/litter_page.dart';
@@ -37,7 +38,7 @@ class _MainScreenState extends State<MainScreen> {
     DashboardScreen(),
     LitterPage(),
     ActivityPage(),
-    ProfilePage(),
+    EnvironmentPage(),
   ];
 
   void _onItemTapped(int index) {
@@ -72,19 +73,6 @@ class _MainScreenState extends State<MainScreen> {
             label: "Profil",
           ),
         ],
-      ),
-    );
-  }
-}
-
-class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text("Profil (à compléter)"),
       ),
     );
   }

@@ -1,0 +1,62 @@
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../models/notification_prefs.dart';
+import '../../models/user.dart';
+
+class MockApiService {
+  static const String notificationPrefsKey = 'notification_prefs';
+
+  Future<bool> login(String email, String password) async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    return email.contains('@') && password.length >= 4;
+  }
+
+  Future<bool> register(User user) async {
+    await Future.delayed(const Duration(milliseconds: 800));
+    return user.email.contains('@');
+  }
+
+  Future<Map<String, dynamic>> fetchDashboardData() async {
+    await Future.delayed(const Duration(milliseconds: 700));
+    return <String, dynamic>{
+      'temperature': 37.8,
+      'humidity': 41,
+      'activityScore': 72,
+      'litterHumidity': 28,
+      'lastSeen': DateTime.now().toIso8601String(),
+    };
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAlerts() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    return <Map<String, dynamic>>[
+      {'type': 'health', 'level': 'info', 'message': 'Tout va bien.'},
+      {
+        'type': 'litter',
+        'level': 'warning',
+        'message': 'Humidité de la litière un peu élevée.'
+      },
+    ];
+  }
+
+  // Sauvegarde des préférences notifications
+  Future<void> saveNotificationPrefs(NotificationPrefs prefs) async {
+    final SharedPreferences sp = await SharedPreferences.getInstance();
+    await sp.setString(notificationPrefsKey, jsonEncode(prefs.toJson()));
+  }
+
+  // Chargement des préférences notifications
+  Future<NotificationPrefs?> loadNotificationPrefs() async {
+    final SharedPreferences sp = await SharedPreferences.getInstance();
+    final String? raw = sp.getString(notificationPrefsKey);
+    if (raw == null) return null;
+    try {
+      final Map<String, dynamic> map = jsonDecode(raw) as Map<String, dynamic>;
+      return NotificationPrefs.fromJson(map);
+    } catch (_) {
+      return null;
+    }
+  }
+}

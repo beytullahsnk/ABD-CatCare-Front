@@ -1,10 +1,10 @@
-import 'package:abd_petcare/screens/dashboard/dashboard_screen.dart';
-import 'package:abd_petcare/screens/environnement/environment_page.dart';
 import 'package:flutter/material.dart';
-import 'screens/activity/activity_page.dart';
-import 'screens/litter/litter_page.dart';
+import 'router/app_router.dart';
+import 'core/services/auth_state.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AuthState.instance.load();
   runApp(const MyApp());
 }
 
@@ -13,67 +13,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Cat Tracker',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const MainScreen(),
-    );
-  }
-}
-
-class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
-
-  @override
-  State<MainScreen> createState() => _MainScreenState();
-}
-
-class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
-
-  final List<Widget> _pages = const [
-    DashboardScreen(),
-    LitterPage(),
-    ActivityPage(),
-    EnvironmentPage(),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: _pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: "Accueil",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.pets),
-            label: "Bac à litière",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.directions_walk),
-            label: "Activité",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: "Profil",
-          ),
-        ],
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue),
+      routerConfig: AppRouter.router,
     );
   }
 }

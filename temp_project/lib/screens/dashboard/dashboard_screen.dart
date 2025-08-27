@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import '../../router/app_router.dart';
 
 import '../../core/services/mock_api_service.dart';
 import '../../core/services/auth_state.dart';
 import '../widgets/section_header.dart';
 import '../widgets/metric_tile.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/utils/status_utils.dart';
 
 /// Ecran tableau de bord
 /// - Récupère les métriques via MockApiService
@@ -69,7 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onSelected: (value) async {
               if (value == 'about') {
                 if (!context.mounted) return;
-                context.go('/about');
+                AppRouter.router.go('/about');
               } else if (value == 'logout') {
                 // Déconnexion simple
                 final messenger = ScaffoldMessenger.of(context);
@@ -82,13 +81,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     content: const Text('Déconnecté'),
                   ),
                 );
-                context.go('/login');
+                AppRouter.router.go('/login');
               }
             },
           ),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () => context.go('/settings/notifications'),
+            onPressed: () {
+              const target = '/settings/notifications';
+              debugPrint('Dashboard: notifications pressed -> $target');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Ouverture: notifications')),
+              );
+              AppRouter.router.push(target);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle_outlined),
+            onPressed: () {
+              const target = '/profile';
+              debugPrint('Dashboard: profile pressed -> $target');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Ouverture: profil')),
+              );
+              AppRouter.router.push(target);
+            },
+            tooltip: 'Profil',
           ),
         ],
       ),
@@ -113,8 +131,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final double temperature =
                     (data['temperature'] as num?)?.toDouble() ?? 0;
                 final int humidity = (data['humidity'] as num?)?.toInt() ?? 0;
-                final int activity =
-                    (data['activityScore'] as num?)?.toInt() ?? 0;
+                // activityScore is available in data but not used in UI yet
                 final int litterHumidity =
                     (data['litterHumidity'] as num?)?.toInt() ?? 0;
                 final String lastSeen = data['lastSeen'] as String? ?? '';

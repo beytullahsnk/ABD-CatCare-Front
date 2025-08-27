@@ -1,3 +1,4 @@
+import 'package:abd_petcare/screens/profile/profile_page.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +8,9 @@ import '../screens/auth/register_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/settings/settings_notifications_screen.dart';
 import '../screens/about/about_screen.dart';
+import 'package:abd_petcare/screens/settings/litter_settings_page.dart';
+import 'package:abd_petcare/screens/settings/environment_settings_page.dart';
+import 'package:abd_petcare/screens/settings/activity_settings_page.dart';
 
 class AppRouter {
   AppRouter._();
@@ -65,6 +69,26 @@ class AppRouter {
         path: '/about',
         name: 'about',
         builder: (context, state) => const AboutScreen(),
+      ),
+      GoRoute(
+        path: '/settings/litter',
+        name: 'settings_litter',
+        builder: (context, state) => const LitterPage(),
+      ),
+      GoRoute(
+        path: '/settings/activity',
+        name: 'settings_activity',
+        builder: (context, state) => const ActivitySettingsPage(),
+      ),
+      GoRoute(
+        path: '/settings/environment',
+        name: 'settings_environment',
+        builder: (context, state) => const EnvironmentSettingsPage(),
+      ),
+      GoRoute(
+        path: '/profile',
+        name: 'profile',
+        builder: (context, state) => const ProfilePage(),
       ),
     ],
   );

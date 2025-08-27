@@ -1,5 +1,6 @@
+// lib/screens/dashboard/dashboard_screen.dart
 import 'package:flutter/material.dart';
-import '../../router/app_router.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/services/mock_api_service.dart';
 import '../../core/services/auth_state.dart';
@@ -21,6 +22,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<Map<String, dynamic>> _futureMetrics;
   final MockApiService _api = MockApiService();
   List<Map<String, dynamic>> _alerts = const [];
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -68,9 +70,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onSelected: (value) async {
               if (value == 'about') {
                 if (!context.mounted) return;
-                AppRouter.router.go('/about');
+                context.push('/about');
               } else if (value == 'logout') {
-                // Déconnexion simple
                 final messenger = ScaffoldMessenger.of(context);
                 final cs = Theme.of(context).colorScheme;
                 await AuthState.instance.setLoggedIn(false);
@@ -81,30 +82,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     content: const Text('Déconnecté'),
                   ),
                 );
-                AppRouter.router.go('/login');
+                context.push('/login');
               }
             },
           ),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
-              const target = '/settings/notifications';
-              debugPrint('Dashboard: notifications pressed -> $target');
+              debugPrint(
+                  'Dashboard: notifications pressed -> settings_notifications');
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Ouverture: notifications')),
               );
-              AppRouter.router.push(target);
+              context.pushNamed('settings_notifications').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
             },
           ),
           IconButton(
             icon: const Icon(Icons.account_circle_outlined),
             onPressed: () {
-              const target = '/profile';
-              debugPrint('Dashboard: profile pressed -> $target');
+              debugPrint('Dashboard: profile pressed -> profile');
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Ouverture: profil')),
               );
-              AppRouter.router.push(target);
+              context.pushNamed('profile').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
             },
             tooltip: 'Profil',
           ),
@@ -207,6 +213,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
+      ),
+
+      // Barre de navigation visible **uniquement** sur le Dashboard
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          switch (index) {
+            case 0:
+              // déjà sur le dashboard
+              break;
+            case 1:
+              context.pushNamed('litter').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
+              break;
+            case 2:
+              // open environment overview via named route
+              context.pushNamed('environment').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
+              break;
+            case 3:
+              context.pushNamed('settings_activity').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
+              break;
+          }
+        },
+        type: BottomNavigationBarType.fixed,
+        // show labels for clarity
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined), label: 'Accueil'),
+          BottomNavigationBarItem(
+              // Litière: utiliser une icône de bac/boîte
+              icon: Icon(Icons.inventory_2),
+              label: 'Bac à litière'),
+          BottomNavigationBarItem(
+              // Environnement: température/thermostat
+              icon: Icon(Icons.thermostat_outlined),
+              label: 'Environnement'),
+          BottomNavigationBarItem(
+              // Activité: déplacement / course
+              icon: Icon(Icons.directions_run_outlined),
+              label: 'Activité'),
+        ],
       ),
     );
   }

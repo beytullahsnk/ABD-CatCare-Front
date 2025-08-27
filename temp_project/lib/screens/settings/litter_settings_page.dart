@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-class LitterPage extends StatefulWidget {
-  const LitterPage({super.key});
+class LitterPageSettings extends StatefulWidget {
+  const LitterPageSettings({super.key});
 
   @override
-  State<LitterPage> createState() => _LitterPageState();
+  State<LitterPageSettings> createState() => _LitterPageState();
 }
 
-class _LitterPageState extends State<LitterPage> {
+class _LitterPageState extends State<LitterPageSettings> {
   int humidity = 40;
   int passages = 3;
   bool notifications = true;

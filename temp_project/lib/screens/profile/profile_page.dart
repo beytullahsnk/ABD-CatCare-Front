@@ -59,7 +59,7 @@ class ProfilePage extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 // ouvre l'écran "Paramètres" principal (celui qui liste Seuils / Notifications...)
-                context.go('/settings/notifications');
+                context.push('/settings/notifications');
               },
             ),
           ),
@@ -90,7 +90,7 @@ class ProfilePage extends StatelessWidget {
               subtitle: const Text('Seuil d’activité'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
-                context.go(
+                context.push(
                     '/settings/activity'); // route vers ActivitySettingsPage
               },
             ),
@@ -115,7 +115,7 @@ class ProfilePage extends StatelessWidget {
               subtitle: const Text('Humidité et récurrence'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
-                context.go('/settings/litter'); // route vers LitterPage
+                context.push('/settings/litter'); // route vers LitterPage
               },
             ),
           ),
@@ -139,7 +139,7 @@ class ProfilePage extends StatelessWidget {
               subtitle: const Text('Température et humidité'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
-                context.go(
+                context.push(
                     '/settings/environment'); // route vers EnvironmentSettingsPage
               },
             ),
@@ -151,7 +151,7 @@ class ProfilePage extends StatelessWidget {
           TextButton.icon(
             onPressed: () async {
               await AuthState.instance.setLoggedIn(false);
-              context.go('/login');
+              context.push('/login');
             },
             icon: const Icon(Icons.logout),
             label: const Text('Se déconnecter'),

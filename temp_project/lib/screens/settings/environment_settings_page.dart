@@ -86,25 +86,13 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
                 children: [
                   _SettingCard(
                     icon: Icons.thermostat,
-                    title: 'Min / Max',
-                    child: Row(
-                      children: [
-                        _MinMaxColumn(
-                          label: 'Min',
-                          valueText: '$tempMin°C',
-                          onDec: decMin,
-                          onInc: incMin,
-                          theme: theme,
-                        ),
-                        const SizedBox(width: 12),
-                        _MinMaxColumn(
-                          label: 'Max',
-                          valueText: '$tempMax°C',
-                          onDec: decMax,
-                          onInc: incMax,
-                          theme: theme,
-                        ),
-                      ],
+                    title: 'Température minimum',
+                    child: _MinMaxColumn(
+                      label: 'Min',
+                      valueText: '$tempMin°C',
+                      onDec: decMin,
+                      onInc: incMin,
+                      theme: theme,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -153,14 +141,15 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
                       children: [
                         ElevatedButton(
                           onPressed: _saving ? null : _savePrefs,
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Text('Enregistrer'),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(
+                                48), // force la pleine largeur
                           ),
+                          child: const Text('Enregistrer'),
                         ),
                         if (_saving)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 12),
+                          const Positioned(
+                            right: 16,
                             child: SizedBox(
                               width: 18,
                               height: 18,

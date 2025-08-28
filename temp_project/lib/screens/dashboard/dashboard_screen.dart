@@ -1,3 +1,4 @@
+// lib/screens/dashboard/dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,7 +7,6 @@ import '../../core/services/auth_state.dart';
 import '../widgets/section_header.dart';
 import '../widgets/metric_tile.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/utils/status_utils.dart';
 
 /// Ecran tableau de bord
 /// - Récupère les métriques via MockApiService
@@ -22,6 +22,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<Map<String, dynamic>> _futureMetrics;
   final MockApiService _api = MockApiService();
   List<Map<String, dynamic>> _alerts = const [];
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -69,9 +70,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onSelected: (value) async {
               if (value == 'about') {
                 if (!context.mounted) return;
-                context.go('/about');
+                context.push('/about');
               } else if (value == 'logout') {
-                // Déconnexion simple
                 final messenger = ScaffoldMessenger.of(context);
                 final cs = Theme.of(context).colorScheme;
                 await AuthState.instance.setLoggedIn(false);
@@ -82,13 +82,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     content: const Text('Déconnecté'),
                   ),
                 );
-                context.go('/login');
+                context.push('/login');
               }
             },
           ),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () => context.go('/settings/notifications'),
+            onPressed: () {
+              debugPrint(
+                  'Dashboard: notifications pressed -> settings_notifications');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Ouverture: notifications')),
+              );
+              context.pushNamed('settings_notifications').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle_outlined),
+            onPressed: () {
+              debugPrint('Dashboard: profile pressed -> profile');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Ouverture: profil')),
+              );
+              context.pushNamed('profile').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
+            },
+            tooltip: 'Profil',
           ),
         ],
       ),
@@ -113,8 +137,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final double temperature =
                     (data['temperature'] as num?)?.toDouble() ?? 0;
                 final int humidity = (data['humidity'] as num?)?.toInt() ?? 0;
-                final int activity =
-                    (data['activityScore'] as num?)?.toInt() ?? 0;
+                // activityScore is available in data but not used in UI yet
                 final int litterHumidity =
                     (data['litterHumidity'] as num?)?.toInt() ?? 0;
                 final String lastSeen = data['lastSeen'] as String? ?? '';
@@ -190,6 +213,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
+      ),
+
+      // Barre de navigation visible **uniquement** sur le Dashboard
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          switch (index) {
+            case 0:
+              // déjà sur le dashboard
+              break;
+            case 1:
+              context.pushNamed('litter').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
+              break;
+            case 2:
+              // open environment overview via named route
+              context.pushNamed('environment').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
+              break;
+            case 3:
+              context.pushNamed('settings_activity').then((_) {
+                if (!mounted) return;
+                setState(() => _currentIndex = 0);
+              });
+              break;
+          }
+        },
+        type: BottomNavigationBarType.fixed,
+        // show labels for clarity
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined), label: 'Accueil'),
+          BottomNavigationBarItem(
+              // Litière: utiliser une icône de bac/boîte
+              icon: Icon(Icons.inventory_2),
+              label: 'Bac à litière'),
+          BottomNavigationBarItem(
+              // Environnement: température/thermostat
+              icon: Icon(Icons.thermostat_outlined),
+              label: 'Environnement'),
+          BottomNavigationBarItem(
+              // Activité: déplacement / course
+              icon: Icon(Icons.directions_run_outlined),
+              label: 'Activité'),
+        ],
       ),
     );
   }

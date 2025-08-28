@@ -20,7 +20,8 @@ class LitterPage extends StatelessWidget {
             Row(
               children: const [
                 Expanded(
-                  child: _InfoCard(title: "Utilisation quotidienne", value: "3 fois"),
+                  child: _InfoCard(
+                      title: "Utilisation quotidienne", value: "3 fois"),
                 ),
                 SizedBox(width: 12),
                 Expanded(
@@ -59,7 +60,8 @@ class LitterPage extends StatelessWidget {
                   Icon(Icons.warning, color: Colors.orange),
                   SizedBox(width: 10),
                   Expanded(
-                    child: Text("Visites fréquentes\nFréquence accrue des visites"),
+                    child: Text(
+                        "Visites fréquentes\nFréquence accrue des visites"),
                   )
                 ],
               ),
@@ -71,8 +73,10 @@ class LitterPage extends StatelessWidget {
         currentIndex: 1,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Accueil"),
-          BottomNavigationBarItem(icon: Icon(Icons.pets), label: "Bac à litière"),
-          BottomNavigationBarItem(icon: Icon(Icons.directions_walk), label: "Activité"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.pets), label: "Bac à litière"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.directions_walk), label: "Activité"),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profil"),
         ],
       ),
@@ -95,7 +99,9 @@ class _InfoCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Text(title, style: const TextStyle(color: Colors.black54)),
         ],

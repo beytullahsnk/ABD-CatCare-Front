@@ -1,6 +1,6 @@
 {
-    "name": "abd_petcare",
-    "short_name": "abd_petcare",
+    "name": "temp_project",
+    "short_name": "temp_project",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

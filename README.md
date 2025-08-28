@@ -42,8 +42,6 @@ développement hors-ligne. Pour basculer vers l'API réelle :
 ApiClient.instance.baseUrl = 'http://localhost:3000/api';
 ```
 
-4. (Optionnel) Démarrer votre stack backend (voir section suivante).
-
 Remarque : `ApiProvider` retourne soit une instance du `MockApiService`, soit
 `RealApiService.instance`. Les écrans utilisent `ApiProvider.instance.get()` —
 pas besoin de modifier plusieurs fichiers.

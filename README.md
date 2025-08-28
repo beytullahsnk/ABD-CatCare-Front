@@ -1,39 +1,79 @@
-# ABD – PetCare (Frontend Flutter)
 
-Projet Flutter mobile-first (Android/iOS), web optionnel. Données mockées via `abd_petcare/lib/core/services/mock_api_service.dart`.
+## ABD PetCare — Frontend (Flutter)
 
-## Prérequis
-- Flutter SDK installé (ou FVM)
+Ce dépôt contient l'application mobile Flutter utilisée pour piloter et visualiser
+les données du système ABD CatCare (capteurs RuuviTag, alertes, profils chat, etc.).
 
-## Installation & Lancement
-```bash
-cd abd_petcare
-flutter create --org com.abdpetcare.app --project-name abd_petcare --platforms=android,ios,web .
-flutter pub get
-flutter run -d <device_id>
+Ce README décrit l'architecture front/backend, les points d'entrée API principaux,
+et comment basculer rapidement entre le mode mock (local) et l'API réelle (dev).
+
+## Architecture (haute-niveau)
+
+- Frontend : Flutter (ce projet)
+- Backend : NestJS microservices (Gateway, Auth, User, Cat, Sensor, Communication)
+- Communication inter-services : NATS
+- Capteurs : RuuviTag via MQTT
+- DB / cache : PostgreSQL, Redis
+
+L'API Gateway expose la documentation Swagger sur : http://localhost:3000/api
+
+## Structure importante du frontend
+
+- `lib/core/services/` : services applicatifs (auth, api client, mock, provider)
+  - `api_client.dart` : client HTTP minimal (baseUrl, get/post/put/delete)
+  - `auth_service.dart` : gestion des tokens (SharedPreferences) et endpoints `/auth/*`
+  - `mock_api_service.dart` : faux back-end pour développement hors ligne
+  - `api_provider.dart` : switch runtime entre mock et real 
+- `lib/screens/` : écrans de l'application (login, register, dashboard, settings...)
+
+## Basculement Mock ↔ API réelle (développement rapide)
+
+Par défaut le projet contient un service de mock (`MockApiService`) utilisé pour le
+développement hors-ligne. Pour basculer vers l'API réelle :
+
+1. Ouvrir `lib/core/services/api_provider.dart`.
+2. Mettre `ApiProvider.instance.useMock = false;` (ou modifier cette valeur au runtime).
+3. Mettre à jour l'URL de base si nécessaire :
+
+	- Modifier `ApiClient.instance.baseUrl` dans `lib/core/services/api_client.dart`.
+	- Exemple :
+
+```
+ApiClient.instance.baseUrl = 'http://localhost:3000/api';
 ```
 
-## Navigation principale
-- /login → /register → /settings/notifications → /dashboard
+4. (Optionnel) Démarrer votre stack backend (voir section suivante).
 
-## Notes
-- Thème Material 3 pastel (`lib/core/theme/app_theme.dart`)
-- go_router (`lib/router/app_router.dart`)
-- Garde d’auth via SharedPreferences (`lib/core/services/auth_state.dart`)
-- Mocks: `MockApiService`
-- Seuils centralisés: `lib/core/constants/app_constants.dart`
-- Statuts KPI: `lib/core/utils/status_utils.dart`
+Remarque : `ApiProvider` retourne soit une instance du `MockApiService`, soit
+`RealApiService.instance`. Les écrans utilisent `ApiProvider.instance.get()` —
+pas besoin de modifier plusieurs fichiers.
 
-Note: Les seuils d’alerte sont modifiables dans `lib/core/constants/app_constants.dart`.
+## Auth & Tokens
 
-## À propos
-- Page: `/about` (titre "À propos", version, crédits, note de démo)
+- Lors d'une connexion réussie, l'access token est stocké dans `SharedPreferences` (clé `catcare_token`).
+- `AuthService` expose `login()`, `logout()` et `fetchCurrentUser()`.
+- Les appels authentifiés utilisent l'en-tête `Authorization: Bearer <token>` via `AuthService.authHeader`.
 
-## Identifiant de package (org neutre)
-- Utilisé: `com.abdpetcare.app`
-- NOTE: Si le projet a été créé avec une autre org, régénérez via:
-  - `flutter create --org com.abdpetcare.app --project-name abd_petcare --platforms=android,ios,web .`
-  - ou renommez manuellement l'applicationId (Android) et le Bundle Identifier (iOS).
+# `TODO` voir avec l'équipe si refresh token 
+Utilisez des refresh tokens côté backend, implémentez la logique de refresh dans `AuthService.authGet` (ou équivalent).
 
-## Parcours de test
-- login/register → settings → dashboard → refresh → logout → about
+## Quickstart Développement (frontend)
+
+1. Installer les dépendances Flutter :
+
+```bash
+flutter pub get
+```
+
+2. Démarrer l'application (ex. debug sur un émulateur) :
+
+```bash
+flutter run
+```
+
+## Ressources
+
+- Backend (NestJS) : Documentation & Swagger sur la Gateway (http://localhost:3000/api)
+et ici https://github.com/eltraore/ABD-CatCare/edit/dev/README.md
+- MQTT : broker et mapping des RuuviTag dans le service `MqttService` du backend
+

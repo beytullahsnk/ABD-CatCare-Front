@@ -15,10 +15,21 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
   static const String _kMaxKey = 'env_max';
   static const String _kThresholdKey = 'env_threshold';
   static const String _kNotifKey = 'env_notifications';
+  // humidity and pressure keys
+  static const String _kHumMinKey = 'env_hum_min';
+  static const String _kHumMaxKey = 'env_hum_max';
+  static const String _kHumSustainedKey = 'env_hum_sustained_min';
+  static const String _kPressureChangeKey = 'env_pressure_change_hpa';
+  static const String _kPressureSustainedKey = 'env_pressure_sustained_min';
 
   int tempMin = 0;
   int tempMax = 30;
   int tempThreshold = 30;
+  int humMin = 30;
+  int humMax = 60;
+  int humSustainedMin = 20; // minutes
+  int pressureChangeHpa = 5;
+  int pressureSustainedMin = 60; // minutes
   bool notifications = true;
   bool _loading = true;
   bool _saving = false;
@@ -36,6 +47,13 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
       tempMax = sp.getInt(_kMaxKey) ?? tempMax;
       tempThreshold = sp.getInt(_kThresholdKey) ?? tempThreshold;
       notifications = sp.getBool(_kNotifKey) ?? notifications;
+      // load humidity & pressure
+      humMin = sp.getInt(_kHumMinKey) ?? humMin;
+      humMax = sp.getInt(_kHumMaxKey) ?? humMax;
+      humSustainedMin = sp.getInt(_kHumSustainedKey) ?? humSustainedMin;
+      pressureChangeHpa = sp.getInt(_kPressureChangeKey) ?? pressureChangeHpa;
+      pressureSustainedMin =
+          sp.getInt(_kPressureSustainedKey) ?? pressureSustainedMin;
       _loading = false;
     });
   }
@@ -46,6 +64,11 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
     await sp.setInt(_kMinKey, tempMin);
     await sp.setInt(_kMaxKey, tempMax);
     await sp.setInt(_kThresholdKey, tempThreshold);
+    await sp.setInt(_kHumMinKey, humMin);
+    await sp.setInt(_kHumMaxKey, humMax);
+    await sp.setInt(_kHumSustainedKey, humSustainedMin);
+    await sp.setInt(_kPressureChangeKey, pressureChangeHpa);
+    await sp.setInt(_kPressureSustainedKey, pressureSustainedMin);
     await sp.setBool(_kNotifKey, notifications);
     if (!mounted) return;
     setState(() => _saving = false);
@@ -66,6 +89,26 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
       setState(() => tempThreshold = (tempThreshold + 1).clamp(-50, 100));
   void decThresh() =>
       setState(() => tempThreshold = (tempThreshold - 1).clamp(-50, 100));
+
+  // humidity helpers
+  void incHumMin() => setState(() => humMin = (humMin + 1).clamp(0, humMax));
+  void decHumMin() => setState(() => humMin = (humMin - 1).clamp(0, humMax));
+  void incHumMax() => setState(() => humMax = (humMax + 1).clamp(humMin, 100));
+  void decHumMax() => setState(() => humMax = (humMax - 1).clamp(humMin, 100));
+  void incHumSust() =>
+      setState(() => humSustainedMin = (humSustainedMin + 5).clamp(0, 1440));
+  void decHumSust() =>
+      setState(() => humSustainedMin = (humSustainedMin - 5).clamp(0, 1440));
+
+  // pressure helpers
+  void incPressureChange() =>
+      setState(() => pressureChangeHpa = (pressureChangeHpa + 1).clamp(0, 100));
+  void decPressureChange() =>
+      setState(() => pressureChangeHpa = (pressureChangeHpa - 1).clamp(0, 100));
+  void incPressureSust() => setState(
+      () => pressureSustainedMin = (pressureSustainedMin + 10).clamp(0, 1440));
+  void decPressureSust() => setState(
+      () => pressureSustainedMin = (pressureSustainedMin - 10).clamp(0, 1440));
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +138,6 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
                       theme: theme,
                     ),
                   ),
-                  const SizedBox(height: 12),
                   _SettingCard(
                     icon: Icons.thermostat_auto,
                     title: 'Seuil de température maximum',
@@ -118,6 +160,96 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  const SectionTitle('Humidité'),
+                  const SizedBox(height: 8),
+
+                  _SettingCard(
+                    icon: Icons.water_drop,
+                    title: 'Plage d\'humidit\u00e9 (min / max)',
+                    child: _MinMaxColumn(
+                      label: 'Hum',
+                      valueText: '$humMin% - $humMax%',
+                      onDec: decHumMin,
+                      onInc: incHumMax,
+                      theme: theme,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _SettingCard(
+                    icon: Icons.timer,
+                    title: 'Durée soutenue avant alerte (humidité)',
+                    child: Row(
+                      children: [
+                        _SmallButton(icon: Icons.remove, onTap: decHumSust),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 80,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceVariant,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text('$humSustainedMin min'),
+                        ),
+                        const SizedBox(width: 8),
+                        _SmallButton(icon: Icons.add, onTap: incHumSust),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // const SectionTitle('Pression'),
+                  // const SizedBox(height: 8),
+                  // _SettingCard(
+                  //   icon: Icons.speed,
+                  //   title: 'Seuil de variation de pression (hPa)',
+                  //   child: Row(
+                  //     children: [
+                  //       _SmallButton(
+                  //           icon: Icons.remove, onTap: decPressureChange),
+                  //       const SizedBox(width: 8),
+                  //       Container(
+                  //         width: 80,
+                  //         padding: const EdgeInsets.symmetric(vertical: 8),
+                  //         alignment: Alignment.center,
+                  //         decoration: BoxDecoration(
+                  //           color: theme.colorScheme.surfaceVariant,
+                  //           borderRadius: BorderRadius.circular(8),
+                  //         ),
+                  //         child: Text('$pressureChangeHpa hPa'),
+                  //       ),
+                  //       const SizedBox(width: 8),
+                  //       _SmallButton(icon: Icons.add, onTap: incPressureChange),
+                  //     ],
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 12),
+                  // _SettingCard(
+                  //   icon: Icons.timer,
+                  //   title: 'Durée soutenue (pression)',
+                  //   child: Row(
+                  //     children: [
+                  //       _SmallButton(
+                  //           icon: Icons.remove, onTap: decPressureSust),
+                  //       const SizedBox(width: 8),
+                  //       Container(
+                  //         width: 80,
+                  //         padding: const EdgeInsets.symmetric(vertical: 8),
+                  //         alignment: Alignment.center,
+                  //         decoration: BoxDecoration(
+                  //           color: theme.colorScheme.surfaceVariant,
+                  //           borderRadius: BorderRadius.circular(8),
+                  //         ),
+                  //         child: Text('$pressureSustainedMin min'),
+                  //       ),
+                  //       const SizedBox(width: 8),
+                  //       _SmallButton(icon: Icons.add, onTap: incPressureSust),
+                  //     ],
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 12),
+
                   const SizedBox(height: 20),
                   const Text('Notifications',
                       style:
@@ -273,4 +405,19 @@ class _SmallButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class SectionTitle extends StatelessWidget {
+  final String text;
+  const SectionTitle(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+        child: Text(text,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
+      );
 }

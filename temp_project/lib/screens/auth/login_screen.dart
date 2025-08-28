@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/auth_state.dart';
-import '../../core/services/mock_api_service.dart';
+import '../../core/services/api_provider.dart';
+// replaced mock API with real auth flow
 import '../../screens/widgets/input_field.dart';
 import '../../screens/widgets/primary_button.dart';
 
@@ -17,7 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final MockApiService _api = MockApiService();
+  final _api = ApiProvider.instance.get();
   bool _submitting = false;
   bool _obscure = true;
 
@@ -50,10 +51,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _submitting = true);
-    final ok = await _api.login(_email.text.trim(), _password.text);
+    final ok =
+        await AuthState.instance.signIn(_email.text.trim(), _password.text);
     setState(() => _submitting = false);
     if (ok) {
-      await AuthState.instance.setLoggedIn(true);
       if (!mounted) return;
       context.go('/dashboard');
     } else {

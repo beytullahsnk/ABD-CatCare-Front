@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/auth_state.dart';
-import '../../core/services/mock_api_service.dart';
+import '../../core/services/api_provider.dart';
 import '../../models/user.dart';
 import '../../models/cat.dart';
 import '../../screens/widgets/primary_button.dart';
@@ -23,7 +23,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _catName = TextEditingController();
   String? _selectedImagePath;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final MockApiService _api = MockApiService();
+  final _api = ApiProvider.instance.get();
   bool _submitting = false;
   bool _obscure = true;
 

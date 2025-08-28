@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/services/mock_api_service.dart';
+import '../../core/services/api_provider.dart';
 import '../../core/services/auth_state.dart';
 import '../widgets/section_header.dart';
 import '../widgets/metric_tile.dart';
@@ -20,7 +20,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   late Future<Map<String, dynamic>> _futureMetrics;
-  final MockApiService _api = MockApiService();
+  final _api = ApiProvider.instance.get();
   List<Map<String, dynamic>> _alerts = const [];
   int _currentIndex = 0;
 

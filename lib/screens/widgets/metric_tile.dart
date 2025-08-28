@@ -3,13 +3,19 @@ import 'package:flutter/material.dart';
 class MetricTile extends StatelessWidget {
   final String title;
   final String subtitle;
-  final IconData leadingIcon;
+
+  /// Optional leading icon (legacy)
+  final IconData? leadingIcon;
+
+  /// Optional leading widget (preferred) - can be Image.asset or any widget
+  final Widget? leadingWidget;
   final Widget? trailingThumb;
   const MetricTile({
     super.key,
     required this.title,
     required this.subtitle,
-    required this.leadingIcon,
+    this.leadingIcon,
+    this.leadingWidget,
     this.trailingThumb,
   });
 
@@ -29,7 +35,10 @@ class MetricTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             alignment: Alignment.center,
-            child: Icon(leadingIcon, color: cs.onSecondaryContainer),
+            child: leadingWidget ??
+                (leadingIcon != null
+                    ? Icon(leadingIcon, color: cs.onSecondaryContainer)
+                    : const SizedBox.shrink()),
           ),
           const SizedBox(width: 12),
           Expanded(

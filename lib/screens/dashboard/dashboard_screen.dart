@@ -41,8 +41,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final cs = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            backgroundColor: cs.error,
-            content: const Text('Impossible de charger les alertes')),
+          backgroundColor: cs.error,
+          content: const Text('Impossible de charger les alertes'),
+        ),
       );
       setState(() => _alerts = const []);
     }
@@ -90,9 +91,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
               debugPrint(
-                  'Dashboard: notifications pressed -> settings_notifications');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Ouverture: notifications')),
+                'Dashboard: notifications pressed -> settings_notifications',
               );
               context.pushNamed('settings_notifications').then((_) {
                 if (!mounted) return;
@@ -104,9 +103,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.account_circle_outlined),
             onPressed: () {
               debugPrint('Dashboard: profile pressed -> profile');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Ouverture: profil')),
-              );
               context.pushNamed('profile').then((_) {
                 if (!mounted) return;
                 setState(() => _currentIndex = 0);
@@ -128,9 +124,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Erreur: ${snapshot.error}'),
-                  );
+                  return Center(child: Text('Erreur: ${snapshot.error}'));
                 }
                 final data = snapshot.data ?? <String, dynamic>{};
 
@@ -154,58 +148,177 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                       alignment: Alignment.center,
-                      child: Icon(Icons.pets,
-                          size: 100, color: cs.onPrimaryContainer),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.asset(
+                          'assets/images/cat_default.png',
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) {
+                            debugPrint(
+                              'Error loading asset default cat.png: $e',
+                            );
+                            return Center(
+                              child: Icon(
+                                Icons.pets,
+                                size: 100,
+                                color: cs.onPrimaryContainer,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    Text('OK',
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    Text(
+                      'OK',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 6),
-                    Text('Tout semble bien',
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: cs.onSurfaceVariant)),
+                    Text(
+                      'Tout semble bien',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                     const SectionHeader('Dernière activité'),
                     MetricTile(
-                        title: 'Dort',
-                        subtitle: lastSeen.isEmpty ? '—' : 'Il y a 1 heure',
-                        leadingIcon: Icons.bedtime),
+                      title: 'Dort',
+                      subtitle: lastSeen.isEmpty ? '—' : 'Il y a 1 heure',
+                      leadingIcon: Icons.bedtime,
+                      trailingThumb: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          'assets/images/inactive_cat.png',
+                          width: 112,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) {
+                            debugPrint(
+                              'Error loading asset inactive_cat.png (thumb): $e',
+                            );
+                            return Container(
+                              width: 112,
+                              height: 64,
+                              color: cs.primaryContainer,
+                              child: Icon(
+                                Icons.bedtime,
+                                color: cs.onPrimaryContainer,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                     const SectionHeader('Environnement'),
                     MetricTile(
-                        title: '${temperature.toStringAsFixed(0)}°C',
-                        subtitle: 'Température',
-                        leadingIcon: Icons.thermostat),
+                      title: '${temperature.toStringAsFixed(0)}°C',
+                      subtitle: 'Température',
+                      leadingIcon: Icons.thermostat,
+                      trailingThumb: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          'assets/images/home_temp.png',
+                          width: 112,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) {
+                            debugPrint('Error loading asset home_temp.png: $e');
+                            return Container(
+                              width: 112,
+                              height: 64,
+                              color: cs.primaryContainer,
+                              child: Icon(
+                                Icons.thermostat,
+                                color: cs.onPrimaryContainer,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                     MetricTile(
-                        title: '$humidity%',
-                        subtitle: 'Humidité',
-                        leadingIcon: Icons.water_drop),
+                      title: '$humidity%',
+                      subtitle: 'Humidité',
+                      leadingIcon: Icons.water_drop,
+                      trailingThumb: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          'assets/images/home_hum.png',
+                          width: 112,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) {
+                            debugPrint('Error loading asset home_hum.png: $e');
+                            return Container(
+                              width: 112,
+                              height: 64,
+                              color: cs.primaryContainer,
+                              child: Icon(
+                                Icons.water_drop,
+                                color: cs.onPrimaryContainer,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                     const SectionHeader('Bac à litière'),
                     MetricTile(
-                        title: litterHumidity > kLitterHumidityHigh
-                            ? 'Humide'
-                            : 'Propre',
-                        subtitle: 'Humidité ${litterHumidity}%',
-                        leadingIcon: Icons.inventory_2),
+                      title: litterHumidity > kLitterHumidityHigh
+                          ? 'Humide'
+                          : 'Propre',
+                      subtitle: 'Humidité ${litterHumidity}%',
+                      leadingIcon: Icons.inventory_2,
+                      trailingThumb: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          'assets/images/litiere.png',
+                          width: 112,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) {
+                            debugPrint('Error loading asset litiere.png: $e');
+                            return Container(
+                              width: 112,
+                              height: 64,
+                              color: cs.primaryContainer,
+                              child: Icon(
+                                Icons.inventory_2,
+                                color: cs.onPrimaryContainer,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                     const SectionHeader('Alertes'),
                     if (_alerts.isEmpty)
                       MetricTile(
-                          title: 'Aucune alerte',
-                          subtitle: 'Tout est normal',
-                          leadingIcon: Icons.info_outline)
+                        title: 'Aucune alerte',
+                        subtitle: 'Tout est normal',
+                        leadingIcon: Icons.info_outline,
+                      )
                     else
-                      ..._alerts.map((a) => MetricTile(
-                            title: '${a['type']}',
-                            subtitle: '${a['message']}',
-                            leadingIcon: a['level'] == 'warning'
-                                ? Icons.warning_amber_rounded
-                                : Icons.info_outline,
-                          )),
+                      ..._alerts.map(
+                        (a) => MetricTile(
+                          title: '${a['type']}',
+                          subtitle: '${a['message']}',
+                          leadingIcon: a['level'] == 'warning'
+                              ? Icons.warning_amber_rounded
+                              : Icons.info_outline,
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Dernière activité'),
                       subtitle: Text(
-                          lastSeen.isEmpty ? '—' : lastSeen.substring(11, 16)),
+                        lastSeen.isEmpty ? '—' : lastSeen.substring(11, 16),
+                      ),
                     ),
                   ],
                 );
@@ -238,7 +351,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               });
               break;
             case 3:
-              context.pushNamed('settings_activity').then((_) {
+              context.pushNamed('activity').then((_) {
                 if (!mounted) return;
                 setState(() => _currentIndex = 0);
               });
@@ -251,23 +364,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         showUnselectedLabels: true,
         items: const [
           BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined), label: 'Accueil'),
+            icon: Icon(Icons.home_outlined),
+            label: 'Accueil',
+          ),
           BottomNavigationBarItem(
-              // Litière: utiliser une icône de bac/boîte
-              icon: Icon(Icons.inventory_2),
-              label: 'Bac à litière'),
+            // Litière: utiliser une icône de bac/boîte
+            icon: Icon(Icons.inventory_2),
+            label: 'Bac à litière',
+          ),
           BottomNavigationBarItem(
-              // Environnement: température/thermostat
-              icon: Icon(Icons.thermostat_outlined),
-              label: 'Environnement'),
+            // Environnement: température/thermostat
+            icon: Icon(Icons.thermostat_outlined),
+            label: 'Environnement',
+          ),
           BottomNavigationBarItem(
-              // Activité: déplacement / course
-              icon: Icon(Icons.directions_run_outlined),
-              label: 'Activité'),
+            // Activité: déplacement / course
+            icon: Icon(Icons.directions_run_outlined),
+            label: 'Activité',
+          ),
         ],
       ),
     );
   }
 }
-
-// Cartes personnalisées remplacées par KpiCard (screens/widgets/kpi_card.dart)

@@ -41,28 +41,6 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Ligne "Paramètres" → ouvre l'écran central des paramètres (overview)
-          Card(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.settings, color: cs.onSecondaryContainer),
-              ),
-              title: const Text('Paramètres'),
-              subtitle: const Text('Gérer les seuils et préférences'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                // ouvre l'écran "Paramètres" principal (celui qui liste Seuils / Notifications...)
-                context.push('/settings/notifications');
-              },
-            ),
-          ),
 
           const SizedBox(height: 16),
 

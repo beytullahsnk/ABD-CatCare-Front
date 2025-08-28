@@ -1,3 +1,4 @@
+import 'package:abd_petcare/screens/activity/activity_page.dart';
 import 'package:abd_petcare/screens/environment/environment_page.dart';
 import 'package:abd_petcare/screens/litter/litter_page.dart';
 import 'package:abd_petcare/screens/profile/profile_page.dart';
@@ -76,6 +77,11 @@ class AppRouter {
         path: '/environment',
         name: 'environment',
         builder: (context, state) => const EnvironmentPage(),
+      ),
+      GoRoute(
+        path: '/activity',
+        name: 'activity',
+        builder: (context, state) => const ActivityPage(),
       ),
       GoRoute(
         path: '/about',

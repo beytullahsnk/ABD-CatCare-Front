@@ -319,4 +319,183 @@ class RealApiService {
       return <Map<String, dynamic>>[];
     }
   }
+
+  /// Récupère les données liées à la litière pour la page dédiée.
+  /// Retour standardisé:
+  /// {
+  ///   dailyUsage: int,            // nombre d'utilisations aujourd'hui
+  ///   cleanliness: int,           // propreté en pourcentage 0-100
+  ///   events: List<String>,       // heures (HH:mm) des derniers passages
+  ///   anomalies: List<String>,    // libellés d'anomalies détectées
+  /// }
+  Future<Map<String, dynamic>> fetchLitterData({String? catId}) async {
+    final String cid = catId ?? defaultCatId;
+    final headers = AuthService.instance.authHeader;
+
+    Future<Map<String, dynamic>?> tryGet(String path) async {
+      final http.Response resp =
+          await ApiClient.instance.get(path, headers: headers);
+      if (resp.statusCode == 200) {
+        final decoded = jsonDecode(resp.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded['data'] is Map<String, dynamic>
+              ? (decoded['data'] as Map<String, dynamic>)
+              : decoded;
+        }
+      }
+      return null;
+    }
+
+    Map<String, dynamic>? raw;
+
+    raw = await tryGet('/litter/stats/$cid');
+    raw ??= await tryGet('/cats/$cid/litter/stats');
+    raw ??= await tryGet('/sensors/litter/stats/$cid');
+    raw ??= await tryGet('/cats/$cid/litter');
+
+    int daily = 0;
+    int cleanliness = 0;
+    double? litterHumidityPct; // 0..100
+    List<String> events = <String>[];
+    List<String> anomalies = <String>[];
+
+    Map<String, dynamic> toReturn() => <String, dynamic>{
+          'dailyUsage': daily,
+          'cleanliness': cleanliness.clamp(0, 100),
+          'events': events,
+          'anomalies': anomalies,
+        };
+
+    if (raw == null) return toReturn();
+
+    try {
+      // Compteurs
+      final usageCandidates = [
+        raw['dailyUsage'],
+        raw['usageToday'],
+        raw['todayCount'],
+        raw['usage_count'],
+      ];
+      for (final c in usageCandidates) {
+        if (c is num) {
+          daily = c.toInt();
+          break;
+        }
+      }
+
+      // Humidité de la litière (prioritaire pour calculer la propreté)
+      final humCandidates = [
+        raw['litterHumidity'],
+        raw['litter_humidity'],
+        raw['humidity_litter'],
+        raw['litter'] is Map ? (raw['litter'] as Map)['humidity'] : null,
+      ];
+      for (final h in humCandidates) {
+        if (h is num) {
+          litterHumidityPct = h.toDouble();
+          break;
+        }
+      }
+      // Événements (passages)
+      final ev = raw['events'] ?? raw['visits'] ?? raw['activity'];
+      if (ev is List) {
+        events = ev
+            .map((e) {
+              if (e is String) return e; // supposé ISO ou HH:mm
+              if (e is Map) {
+                final m = e.cast<String, dynamic>();
+                return m['time'] ?? m['timestamp'] ?? m['at'];
+              }
+              return null;
+            })
+            .whereType<String>()
+            .map((s) {
+              try {
+                final dt = DateTime.tryParse(s);
+                if (dt != null) {
+                  final h = dt.hour.toString().padLeft(2, '0');
+                  final m = dt.minute.toString().padLeft(2, '0');
+                  return '$h:$m';
+                }
+              } catch (_) {}
+              return s; // déjà formaté
+            })
+            .toList(growable: false);
+      }
+
+      // anomalies éventuelles
+      final an = raw['anomalies'] ?? raw['alerts'] ?? raw['warnings'];
+      if (an is List) {
+        anomalies = an
+            .map((e) {
+              if (e is String) return e;
+              if (e is Map) {
+                final m = e.cast<String, dynamic>();
+                return m['message'] ?? m['label'] ?? m['type'];
+              }
+              return null;
+            })
+            .whereType<String>()
+            .toList(growable: false);
+      }
+
+      if (litterHumidityPct == null) {
+        try {
+          // tester variante coté back end
+          final http.Response typedResp = await ApiClient.instance.get(
+            '/sensors/stats/$cid?hours=24&type=litter',
+            headers: headers,
+          );
+          if (typedResp.statusCode == 200) {
+            final typed = jsonDecode(typedResp.body);
+            if (typed is Map<String, dynamic>) {
+              final h = typed['humidity'];
+              if (h is Map && h['avg'] is num) {
+                litterHumidityPct = (h['avg'] as num).toDouble();
+              }
+            }
+          }
+
+          // 2) Fallback: stats génériques (non filtrées)
+          final stats = await getSensorStats(cid, hours: 24);
+          if (stats != null) {
+            final data = stats['data'] is Map<String, dynamic>
+                ? stats['data'] as Map<String, dynamic>
+                : stats;
+            final candidates = [
+              data['litterHumidity'],
+              data['litter_humidity'],
+              data['humidity_litter'],
+              data['litter'] is Map
+                  ? (data['litter'] as Map)['humidity']
+                  : null,
+              data['litterHumidity'] is Map
+                  ? (data['litterHumidity']['avg'] ??
+                      data['litterHumidity']['value'])
+                  : null,
+              data['humidity'] is Map ? data['humidity']['avg'] : null,
+            ];
+            for (final h in candidates) {
+              if (h is num) {
+                litterHumidityPct = h.toDouble();
+                break;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // normalisation+ calcul propreté = 100 - humidité
+      if (litterHumidityPct != null) {
+        double h = litterHumidityPct;
+        if (h >= 0 && h <= 1) h *= 100; // ratio -> %
+        h = h.clamp(0, 100);
+        cleanliness = (100 - h).round();
+      }
+    } catch (_) {
+      // Renvoie ce qui a pu être extrait
+    }
+
+    return toReturn();
+  }
 }

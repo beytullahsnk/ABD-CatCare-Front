@@ -23,7 +23,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      // both mock and real expose getUserNotifications
       final list = await _api.getUserNotifications(limit: 50, offset: 0);
       if (!mounted) return;
       setState(() {
@@ -43,27 +42,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  // Note: plus d'auto "lu" à l'ouverture; on marque comme lu au tap.
+
   String _formatTimestamp(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-
-    if (diff.inDays == 0) {
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return '${h}h$m';
-    }
-    if (diff.inDays == 1) {
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return 'Hier, ${h}h$m';
-    }
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return 'Il y a ${diff.inDays} jours, ${h}h$m';
+    String two(int v) => v.toString().padLeft(2, '0');
+    if (diff.inDays == 0) return '${two(dt.hour)}h${two(dt.minute)}';
+    if (diff.inDays == 1) return 'Hier, ${two(dt.hour)}h${two(dt.minute)}';
+    return 'Il y a ${diff.inDays} jours, ${two(dt.hour)}h${two(dt.minute)}';
   }
 
   List<Map<String, dynamic>> _filterForTab(int tabIndex) {
-    // 0 = Tout, 1 = Activité, 2 = Litière, 3 = Environnement
     if (tabIndex == 0) return _items;
     final key = tabIndex == 1
         ? 'activity'
@@ -76,7 +66,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   String _mapTypeToCategory(dynamic type) {
-    // fallback mapping if backend returns alert types instead of category
     switch (type?.toString().toUpperCase()) {
       case 'MOVEMENT':
       case 'INACTIVITY':
@@ -101,9 +90,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
       );
     }
-
     final cs = Theme.of(context).colorScheme;
-
+    final theme = Theme.of(context);
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
@@ -126,15 +114,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           return ListTile(
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            leading: Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: cs.secondaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: cs.onSecondaryContainer),
+            leading: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: cs.secondaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: cs.onSecondaryContainer),
+                ),
+                if (!isRead)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: cs.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: theme.scaffoldBackgroundColor, width: 2),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             title: Text(title, style: Theme.of(context).textTheme.titleMedium),
             subtitle: Padding(
@@ -146,24 +154,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
               ),
             ),
-            trailing: isRead
-                ? null
-                : TextButton(
-                    onPressed: () async {
-                      final ok =
-                          await _api.markNotificationRead(n['id'] as String);
-                      if (ok) {
-                        _load();
+            onTap: () async {
+              // Marque comme lu lors du tap si nécessaire
+              if (n['readAt'] == null && n['id'] is String) {
+                try {
+                  await _api.markNotificationRead(n['id'] as String);
+                  if (mounted) {
+                    setState(() {
+                      final idx = _items.indexWhere((e) => e['id'] == n['id']);
+                      if (idx != -1) {
+                        final updated = Map<String, dynamic>.from(_items[idx]);
+                        updated['readAt'] = DateTime.now().toIso8601String();
+                        _items = List.from(_items)..[idx] = updated;
                       }
-                    },
-                    child: const Text('Marquer lu'),
-                  ),
-            onTap: () {
-              // deep link if data.actionUrl present
+                    });
+                  }
+                } catch (_) {
+                  // Non bloquant
+                }
+              }
+
               final actionUrl =
                   n['data'] is Map ? (n['data']['actionUrl'] as String?) : null;
               if (actionUrl != null && actionUrl.isNotEmpty) {
-                // Adapt route handling as needed
                 context.push(actionUrl);
               }
             },
@@ -188,8 +201,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // DefaultTabController length = 4 (Tout, Activité, Litière, Environnement)
     return DefaultTabController(
       length: 4,
       child: Scaffold(

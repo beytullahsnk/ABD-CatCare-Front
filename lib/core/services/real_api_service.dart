@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:abd_petcare/core/services/auth_service.dart';
+import 'package:abd_petcare/models/notification_prefs.dart';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
 
@@ -129,6 +130,131 @@ class RealApiService {
       headers: AuthService.instance.authHeader,
     );
     return resp.statusCode == 200 || resp.statusCode == 204;
+  }
+
+  // ----- Préférences & Seuils (sync avec le backend) -----
+
+  /// Sauvegarde des préférences de notifications globales (par catégories/canal)
+  /// Essaie plusieurs endpoints possibles pour tolérer les variantes de gateway.
+  Future<bool> saveNotificationPrefs(NotificationPrefs prefs) async {
+    final body = prefs.toJson();
+    // 1) Endpoint communication dédié
+    http.Response resp = await ApiClient.instance.post(
+      '/communication/notification-prefs',
+      body,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    // 2) Endpoint côté user
+    resp = await ApiClient.instance.post(
+      '/users/me/notification-prefs',
+      body,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    // 3) Endpoint générique
+    resp = await ApiClient.instance.post(
+      '/notification-prefs',
+      body,
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204;
+  }
+
+  /// Sauvegarde des réglages Activité (fenêtres, seuils, on/off)
+  Future<bool> saveActivitySettings(Map<String, dynamic> settings,
+      {String? catId}) async {
+    final String cid = catId ?? defaultCatId;
+    http.Response resp = await ApiClient.instance.post(
+      '/users/me/settings/activity',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/cats/$cid/settings/activity',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/settings/activity',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204;
+  }
+
+  /// Sauvegarde des réglages Environnement (temp/hum/…)
+  Future<bool> saveEnvironmentSettings(Map<String, dynamic> settings,
+      {String? catId}) async {
+    final String cid = catId ?? defaultCatId;
+    http.Response resp = await ApiClient.instance.post(
+      '/users/me/settings/environment',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/cats/$cid/settings/environment',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/settings/environment',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204;
+  }
+
+  /// Sauvegarde des réglages Litière
+  Future<bool> saveLitterSettings(Map<String, dynamic> settings,
+      {String? catId}) async {
+    final String cid = catId ?? defaultCatId;
+    http.Response resp = await ApiClient.instance.post(
+      '/users/me/settings/litter',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/cats/$cid/settings/litter',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/settings/litter',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204;
   }
 
   // ----- Compat Dashboard (même API que MockApiService) -----

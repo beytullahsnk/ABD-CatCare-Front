@@ -63,18 +63,18 @@ Objectif: notifications fiables, non redondantes, cohérentes entre plateformes.
 
 - Responsabilités
   - Backend:
-    - Détecte les anomalies et crée des Alertes (déduplication/cooldown).
+    - Détecte les anomalies et crée des Alertes.
     - Applique les préférences utilisateur (catégories/sévérité) et envoie via la file (push/email).
     - Persiste le flux des notifications (`NotificationEntity`).
   - Flutter :
-    - Enregistre le token de l’appareil et gère l’affichage (liste, filtres, deep‑links).
-    - Permet les actions utilisateur: « marquer comme lu », « résoudre ».
+  - Enregistre le token de l’appareil et gère l’affichage (liste, filtres, deep‑links).
+  - Règles UI: badge « non lu », pas d’auto‑lecture à l’ouverture de la page; une notification passe à « lue » au tap. Action « résoudre » disponible selon le type.
     - Fallback: polling périodique si push inactif.
 
 - Flux
 1.  Données capteurs → Alerte créée → Notification en file + sauvegarde DB.
-2. Mobile reçoit un push (ou rafraîchit la liste par API). Taper la notif ouvre l’écran ciblé.
-3. L’utilisateur peut marquer une notification comme lue, ou résoudre une alerte.
+2. Mobile reçoit un push  Taper la notif ouvre l’écran ciblé.
+3. Dans l’app, une notification devient « lue » lorsqu’elle est ouverte (action=tap).
 
 - Endpoints côté app (tolérance aux variantes du gateway)
   - Feed (in‑app):

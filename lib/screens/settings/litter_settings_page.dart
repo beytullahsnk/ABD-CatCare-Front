@@ -55,7 +55,7 @@ class _LitterPageState extends State<LitterPageSettings> {
             ),
             const SizedBox(height: 12),
             _SettingCard(
-              icon: Icons.pedal_bike,
+              icon: Icons.directions_walk,
               title: 'Seuil de passages',
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -124,12 +124,11 @@ class _SettingCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1))
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: Row(
         children: [
@@ -137,7 +136,7 @@ class _SettingCard extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: cs.secondaryContainer,
+              color: cs.surfaceVariant,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: cs.onSecondaryContainer),

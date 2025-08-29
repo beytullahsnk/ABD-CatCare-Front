@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:abd_petcare/core/services/auth_service.dart';
+import 'package:abd_petcare/models/notification_prefs.dart';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
 
@@ -39,14 +40,25 @@ class RealApiService {
   }
 
   Future<List<dynamic>> getCatAlerts(String catId) async {
-    final resp = await ApiClient.instance.get(
+    // 1) Chemin documenté dans README: /cats/{id}/alerts
+    http.Response resp = await ApiClient.instance.get(
       '/cats/$catId/alerts',
       headers: AuthService.instance.authHeader,
     );
     if (resp.statusCode == 200) {
       final data = jsonDecode(resp.body);
-      // selon gateway, ça peut être { state, data, message } ou directement la liste
       if (data is Map && data['data'] != null)
+        return data['data'] as List<dynamic>;
+      if (data is List) return data;
+    }
+    // 2) Chemin utilisé par le script de test: /sensors/alerts/{catId}
+    resp = await ApiClient.instance.get(
+      '/sensors/alerts/$catId',
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200) {
+      final data = jsonDecode(resp.body);
+      if (data is Map && data['data'] is List)
         return data['data'] as List<dynamic>;
       if (data is List) return data;
     }
@@ -60,6 +72,189 @@ class RealApiService {
       headers: AuthService.instance.authHeader,
     );
     return resp.statusCode == 200 || resp.statusCode == 201;
+  }
+
+  // ----- Notifications (in-app feed) -----
+
+  /// Récupère les notifications de l'utilisateur connecté
+  /// Retourne une liste de maps (NotificationEntity-like)
+  Future<List<Map<String, dynamic>>> getUserNotifications({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final http.Response resp = await ApiClient.instance.get(
+      '/communication/notifications?limit=$limit&offset=$offset',
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200) {
+      final decoded = jsonDecode(resp.body);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((e) => e.cast<String, dynamic>())
+            .toList();
+      }
+      if (decoded is Map && decoded['data'] is List) {
+        return (decoded['data'] as List)
+            .whereType<Map>()
+            .map((e) => e.cast<String, dynamic>())
+            .toList();
+      }
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+  /// Marque une notification comme lue
+  Future<bool> markNotificationRead(String notificationId) async {
+    final http.Response resp = await ApiClient.instance.post(
+      '/communication/notifications/$notificationId/read',
+      const {},
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 || resp.statusCode == 204;
+  }
+
+  /// Marque une alerte comme résolue
+  Future<bool> resolveAlert(String alertId) async {
+    // 1) Route générique
+    http.Response resp = await ApiClient.instance.post(
+      '/alerts/$alertId/resolve',
+      const {},
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 || resp.statusCode == 204) return true;
+    // 2) Variante côté sensors
+    resp = await ApiClient.instance.post(
+      '/sensors/alerts/$alertId/resolve',
+      const {},
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 || resp.statusCode == 204;
+  }
+
+  // ----- Préférences & Seuils (sync avec le backend) -----
+
+  /// Sauvegarde des préférences de notifications globales (par catégories/canal)
+  /// Essaie plusieurs endpoints possibles pour tolérer les variantes de gateway.
+  Future<bool> saveNotificationPrefs(NotificationPrefs prefs) async {
+    final body = prefs.toJson();
+    // 1) Endpoint communication dédié
+    http.Response resp = await ApiClient.instance.post(
+      '/communication/notification-prefs',
+      body,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    // 2) Endpoint côté user
+    resp = await ApiClient.instance.post(
+      '/users/me/notification-prefs',
+      body,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    // 3) Endpoint générique
+    resp = await ApiClient.instance.post(
+      '/notification-prefs',
+      body,
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204;
+  }
+
+  /// Sauvegarde des réglages Activité (fenêtres, seuils, on/off)
+  Future<bool> saveActivitySettings(Map<String, dynamic> settings,
+      {String? catId}) async {
+    final String cid = catId ?? defaultCatId;
+    http.Response resp = await ApiClient.instance.post(
+      '/users/me/settings/activity',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/cats/$cid/settings/activity',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/settings/activity',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204;
+  }
+
+  /// Sauvegarde des réglages Environnement (temp/hum/…)
+  Future<bool> saveEnvironmentSettings(Map<String, dynamic> settings,
+      {String? catId}) async {
+    final String cid = catId ?? defaultCatId;
+    http.Response resp = await ApiClient.instance.post(
+      '/users/me/settings/environment',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/cats/$cid/settings/environment',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/settings/environment',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204;
+  }
+
+  /// Sauvegarde des réglages Litière
+  Future<bool> saveLitterSettings(Map<String, dynamic> settings,
+      {String? catId}) async {
+    final String cid = catId ?? defaultCatId;
+    http.Response resp = await ApiClient.instance.post(
+      '/users/me/settings/litter',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/cats/$cid/settings/litter',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204) return true;
+    resp = await ApiClient.instance.post(
+      '/settings/litter',
+      settings,
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 ||
+        resp.statusCode == 201 ||
+        resp.statusCode == 204;
   }
 
   // ----- Compat Dashboard (même API que MockApiService) -----

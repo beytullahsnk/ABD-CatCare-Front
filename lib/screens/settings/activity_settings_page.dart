@@ -113,7 +113,7 @@ class _ActivitySettingsPageState extends State<ActivitySettingsPage> {
             Text('Activité', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             _SettingCard(
-              icon: Icons.directions_run,
+              icon: Icons.pets,
               title: 'Déclenchement',
               child: Row(children: [
                 _SmallButton(icon: Icons.remove, onTap: decTrigger),
@@ -126,7 +126,7 @@ class _ActivitySettingsPageState extends State<ActivitySettingsPage> {
                     color: theme.colorScheme.surfaceVariant,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('$triggerCount déclenchements'),
+                  child: Text('$triggerCount'),
                 ),
                 const SizedBox(width: 8),
                 _SmallButton(icon: Icons.add, onTap: incTrigger),
@@ -200,18 +200,14 @@ class _ActivitySettingsPageState extends State<ActivitySettingsPage> {
               ]),
             ),
             const SizedBox(height: 20),
-            const Text('Notifications',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
             Row(
               children: [
                 const Icon(Icons.notifications_none),
                 const SizedBox(width: 12),
                 const Expanded(child: Text('Notifications push')),
                 Switch(
-                  value: notifications,
-                  onChanged: (v) => setState(() => notifications = v),
-                ),
+                    value: notifications,
+                    onChanged: (v) => setState(() => notifications = v)),
               ],
             ),
             ElevatedButton(
@@ -246,8 +242,9 @@ class _SettingCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: Row(
         children: [
@@ -255,7 +252,7 @@ class _SettingCard extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: cs.secondaryContainer,
+              color: cs.surfaceVariant,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: cs.onSecondaryContainer),

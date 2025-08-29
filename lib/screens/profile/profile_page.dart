@@ -51,14 +51,20 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(height: 8),
 
           Card(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: Colors.white,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
             child: ListTile(
               leading: Container(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
+                  color: cs.surfaceVariant,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child:
@@ -77,14 +83,20 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(height: 8),
 
           Card(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: Colors.white,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
             child: ListTile(
               leading: Container(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
+                  color: cs.surfaceVariant,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(Icons.inventory_2, color: cs.onSecondaryContainer),
@@ -101,14 +113,20 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(height: 8),
 
           Card(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            color: Colors.white,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
             child: ListTile(
               leading: Container(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: cs.secondaryContainer,
+                  color: cs.surfaceVariant,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(Icons.thermostat, color: cs.onSecondaryContainer),

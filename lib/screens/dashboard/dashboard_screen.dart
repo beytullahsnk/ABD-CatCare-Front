@@ -139,7 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final theme = Theme.of(context);
                 final cs = theme.colorScheme;
                 return ListView(
-                  children: [S
+                  children: [
                     const SectionHeader('État général'),
                     Container(
                       height: 180,

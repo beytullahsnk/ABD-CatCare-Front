@@ -57,6 +57,38 @@ pas besoin de modifier plusieurs fichiers.
 # `TODO` voir avec l'équipe si refresh token 
 Utilisez des refresh tokens côté backend, implémentez la logique de refresh dans `AuthService.authGet` (ou équivalent).
 
+## Notifications (raisonnement & implémentation)
+
+Objectif: notifications fiables, non redondantes, cohérentes entre plateformes.
+
+- Responsabilités
+  - Backend:
+    - Détecte les anomalies et crée des Alertes (déduplication/cooldown).
+    - Applique les préférences utilisateur (catégories/sévérité) et envoie via la file (push/email).
+    - Persiste le flux des notifications (`NotificationEntity`).
+  - Flutter :
+    - Enregistre le token de l’appareil et gère l’affichage (liste, filtres, deep‑links).
+    - Permet les actions utilisateur: « marquer comme lu », « résoudre ».
+    - Fallback: polling périodique si push inactif.
+
+- Flux
+1.  Données capteurs → Alerte créée → Notification en file + sauvegarde DB.
+2. Mobile reçoit un push (ou rafraîchit la liste par API). Taper la notif ouvre l’écran ciblé.
+3. L’utilisateur peut marquer une notification comme lue, ou résoudre une alerte.
+
+- Endpoints côté app (tolérance aux variantes du gateway)
+  - Feed (in‑app):
+    - GET `/communication/notifications?limit=&offset=` → liste des notifications utilisateur.
+    - POST `/communication/notifications/{id}/read` → marquer comme lue.
+  - Alertes (actives):
+    - GET `/cats/{catId}/alerts` (prioritaire), fallback GET `/sensors/alerts/{catId}`.
+    - POST `/alerts/{alertId}/resolve`, fallback POST `/sensors/alerts/{alertId}/resolve`.
+
+## TODO
+  - Ajouter `firebase_messaging` et `flutter_local_notifications`.
+  - À la connexion: enregistrer le `deviceToken` via un endpoint dédié (`POST /devices`).
+  - Sur tap de push: deep‑link vers l’écran/alerte concerné(e).
+
 ## Quickstart Développement (frontend)
 
 1. Installer les dépendances Flutter :

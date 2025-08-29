@@ -39,14 +39,25 @@ class RealApiService {
   }
 
   Future<List<dynamic>> getCatAlerts(String catId) async {
-    final resp = await ApiClient.instance.get(
+    // 1) Chemin documenté dans README: /cats/{id}/alerts
+    http.Response resp = await ApiClient.instance.get(
       '/cats/$catId/alerts',
       headers: AuthService.instance.authHeader,
     );
     if (resp.statusCode == 200) {
       final data = jsonDecode(resp.body);
-      // selon gateway, ça peut être { state, data, message } ou directement la liste
       if (data is Map && data['data'] != null)
+        return data['data'] as List<dynamic>;
+      if (data is List) return data;
+    }
+    // 2) Chemin utilisé par le script de test: /sensors/alerts/{catId}
+    resp = await ApiClient.instance.get(
+      '/sensors/alerts/$catId',
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200) {
+      final data = jsonDecode(resp.body);
+      if (data is Map && data['data'] is List)
         return data['data'] as List<dynamic>;
       if (data is List) return data;
     }
@@ -60,6 +71,64 @@ class RealApiService {
       headers: AuthService.instance.authHeader,
     );
     return resp.statusCode == 200 || resp.statusCode == 201;
+  }
+
+  // ----- Notifications (in-app feed) -----
+
+  /// Récupère les notifications de l'utilisateur connecté
+  /// Retourne une liste de maps (NotificationEntity-like)
+  Future<List<Map<String, dynamic>>> getUserNotifications({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final http.Response resp = await ApiClient.instance.get(
+      '/communication/notifications?limit=$limit&offset=$offset',
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200) {
+      final decoded = jsonDecode(resp.body);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((e) => e.cast<String, dynamic>())
+            .toList();
+      }
+      if (decoded is Map && decoded['data'] is List) {
+        return (decoded['data'] as List)
+            .whereType<Map>()
+            .map((e) => e.cast<String, dynamic>())
+            .toList();
+      }
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+  /// Marque une notification comme lue
+  Future<bool> markNotificationRead(String notificationId) async {
+    final http.Response resp = await ApiClient.instance.post(
+      '/communication/notifications/$notificationId/read',
+      const {},
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 || resp.statusCode == 204;
+  }
+
+  /// Marque une alerte comme résolue
+  Future<bool> resolveAlert(String alertId) async {
+    // 1) Route générique
+    http.Response resp = await ApiClient.instance.post(
+      '/alerts/$alertId/resolve',
+      const {},
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode == 200 || resp.statusCode == 204) return true;
+    // 2) Variante côté sensors
+    resp = await ApiClient.instance.post(
+      '/sensors/alerts/$alertId/resolve',
+      const {},
+      headers: AuthService.instance.authHeader,
+    );
+    return resp.statusCode == 200 || resp.statusCode == 204;
   }
 
   // ----- Compat Dashboard (même API que MockApiService) -----

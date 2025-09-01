@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/auth_state.dart';
-import '../../core/services/api_provider.dart';
-import '../../models/user.dart';
-import '../../models/cat.dart';
+// import '../../core/services/api_provider.dart';
+import '../../core/services/auth_service.dart';
 import '../../screens/widgets/primary_button.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -23,7 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _catName = TextEditingController();
   String? _selectedImagePath;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final _api = ApiProvider.instance.get();
+  // final _api = ApiProvider.instance.get(); // not used with direct AuthService.register
   bool _submitting = false;
   bool _obscure = true;
 
@@ -53,19 +52,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _submitting = true);
 
-    final user = User(
-      id: UniqueKey().toString(),
-      name: '${_firstName.text.trim()} ${_lastName.text.trim()}',
-      email: _email.text.trim(),
+    // Appel du vrai endpoint /auth/register
+    final email = _email.text.trim();
+    final username = email.contains('@')
+        ? email.split('@').first
+        : (_firstName.text.trim().isNotEmpty ||
+                _lastName.text.trim().isNotEmpty)
+            ? '${_firstName.text.trim()}_${_lastName.text.trim()}'
+            : 'user_${DateTime.now().millisecondsSinceEpoch}';
+    final phone = _phone.text.trim();
+    final ok = await AuthService.instance.register(
+      email: email,
+      username: username,
+      phoneNumber: phone,
+      password: _password.text,
     );
-    final cat = Cat(
-      id: UniqueKey().toString(),
-      name: _catName.text.trim(),
-      ageMonths: 0,
-      breed: null,
-    );
-
-    final ok = await _api.register(user);
     setState(() => _submitting = false);
     if (ok) {
       await AuthState.instance.setLoggedIn(true);
@@ -73,8 +74,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       context.go('/settings/notifications');
     } else {
       if (!mounted) return;
+      final msg = AuthService.instance.lastError;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Echec de l'inscription")),
+        SnackBar(
+            content: Text(msg == null || msg.isEmpty
+                ? "Echec de l'inscription"
+                : "Echec de l'inscription: $msg")),
       );
     }
   }

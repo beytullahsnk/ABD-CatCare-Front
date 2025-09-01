@@ -6,7 +6,7 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
 
   // Base URL de l'API Gateway (modifiable)
-  String baseUrl = 'http://localhost:3000/api';
+  String baseUrl = 'http://localhost:3000';
   Map<String, String> defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',

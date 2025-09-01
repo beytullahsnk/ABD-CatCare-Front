@@ -40,6 +40,26 @@ class MockApiService {
     ];
   }
 
+  // ----- Litter (mock) -----
+  Future<Map<String, dynamic>> fetchLitterData() async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    // Réutilise la donnée mock du tableau de bord si disponible
+    final dashboard = await fetchDashboardData();
+    final double litterHumidity = (dashboard['litterHumidity'] is num)
+        ? (dashboard['litterHumidity'] as num).toDouble()
+        : 35.0;
+    final int cleanliness = (100 - litterHumidity).round().clamp(0, 100);
+
+    return <String, dynamic>{
+      'dailyUsage': 3,
+      'cleanliness': cleanliness,
+      'events': <String>['10:15', '07:30', '05:00'],
+      'anomalies': litterHumidity > 60
+          ? <String>['Litière humide: ${litterHumidity.toStringAsFixed(0)}%']
+          : <String>[],
+    };
+  }
+
   // ----- Notifications feed (mock) -----
   Future<List<Map<String, dynamic>>> getUserNotifications({
     int limit = 50,

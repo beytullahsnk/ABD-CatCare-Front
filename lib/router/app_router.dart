@@ -9,7 +9,7 @@ import '../core/services/auth_state.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
-import '../screens/settings/settings_notifications_screen.dart';
+import '../screens/notifications/notifications.dart';
 import '../screens/about/about_screen.dart';
 import '../screens/settings/litter_settings_page.dart';
 import '../screens/settings/environment_settings_page.dart';
@@ -66,7 +66,7 @@ class AppRouter {
       GoRoute(
         path: '/settings/notifications',
         name: 'settings_notifications',
-        builder: (context, state) => const SettingsNotificationsScreen(),
+        builder: (context, state) => const NotificationsScreen(),
       ),
       GoRoute(
         path: '/litter',

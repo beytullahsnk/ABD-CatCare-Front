@@ -139,7 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final theme = Theme.of(context);
                 final cs = theme.colorScheme;
                 return ListView(
-                  children: [S
+                  children: [
                     const SectionHeader('État général'),
                     Container(
                       height: 180,
@@ -378,8 +378,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: 'Environnement',
           ),
           BottomNavigationBarItem(
-            // Activité: déplacement / course
-            icon: Icon(Icons.directions_run_outlined),
+            // Activité: chat/patte (pets)
+            icon: Icon(Icons.pets),
             label: 'Activité',
           ),
         ],

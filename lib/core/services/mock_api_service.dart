@@ -40,6 +40,67 @@ class MockApiService {
     ];
   }
 
+  // ----- Litter (mock) -----
+  Future<Map<String, dynamic>> fetchLitterData() async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    // Réutilise la donnée mock du tableau de bord si disponible
+    final dashboard = await fetchDashboardData();
+    final double litterHumidity = (dashboard['litterHumidity'] is num)
+        ? (dashboard['litterHumidity'] as num).toDouble()
+        : 35.0;
+    final int cleanliness = (100 - litterHumidity).round().clamp(0, 100);
+
+    return <String, dynamic>{
+      'dailyUsage': 3,
+      'cleanliness': cleanliness,
+      'events': <String>['10:15', '07:30', '05:00'],
+      'anomalies': litterHumidity > 60
+          ? <String>['Litière humide: ${litterHumidity.toStringAsFixed(0)}%']
+          : <String>[],
+    };
+  }
+
+  // ----- Notifications feed (mock) -----
+  Future<List<Map<String, dynamic>>> getUserNotifications({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final now = DateTime.now();
+    return <Map<String, dynamic>>[
+      {
+        'id': 'n1',
+        'title': 'Activité accrue détectée',
+        'message': 'Votre chat bouge beaucoup.',
+        'category': 'activity',
+        'createdAt': now.subtract(const Duration(hours: 2)).toIso8601String(),
+        'readAt': null,
+      },
+      {
+        'id': 'n2',
+        'title': 'Litière: action recommandée',
+        'message': 'Humidité de la litière élevée.',
+        'category': 'litter',
+        'createdAt':
+            now.subtract(const Duration(days: 1, hours: 3)).toIso8601String(),
+        'readAt': null,
+      },
+      {
+        'id': 'n3',
+        'title': 'Changement de température',
+        'message': 'Température ambiante en hausse.',
+        'category': 'environment',
+        'createdAt': now.subtract(const Duration(days: 2)).toIso8601String(),
+        'readAt': now.subtract(const Duration(days: 1)).toIso8601String(),
+      },
+    ];
+  }
+
+  Future<bool> markNotificationRead(String notificationId) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    return true;
+  }
+
   // Sauvegarde des préférences notifications
   Future<void> saveNotificationPrefs(NotificationPrefs prefs) async {
     final SharedPreferences sp = await SharedPreferences.getInstance();

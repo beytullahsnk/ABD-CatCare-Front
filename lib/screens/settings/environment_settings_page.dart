@@ -173,6 +173,7 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
                       onDec: decHumMin,
                       onInc: incHumMax,
                       theme: theme,
+                      boxWidth: 130,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -201,17 +202,7 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
                   const SizedBox(height: 12),
                   // const SectionTitle('Pression'),
                   // const SizedBox(height: 8),
-                  // _SettingCard(
-                  //   icon: Icons.speed,
-                  //   title: 'Seuil de variation de pression (hPa)',
-                  //   child: Row(
-                  //     children: [
-                  //       _SmallButton(
-                  //           icon: Icons.remove, onTap: decPressureChange),
-                  //       const SizedBox(width: 8),
-                  //       Container(
-                  //         width: 80,
-                  //         padding: const EdgeInsets.symmetric(vertical: 8),
+
                   //         alignment: Alignment.center,
                   //         decoration: BoxDecoration(
                   //           color: theme.colorScheme.surfaceVariant,
@@ -310,9 +301,11 @@ class _SettingCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: Row(
         children: [
@@ -320,7 +313,7 @@ class _SettingCard extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: cs.secondaryContainer,
+              color: cs.surfaceVariant,
               borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
@@ -344,12 +337,14 @@ class _MinMaxColumn extends StatelessWidget {
   final VoidCallback onDec;
   final VoidCallback onInc;
   final ThemeData theme;
+  final double? boxWidth;
   const _MinMaxColumn({
     required this.label,
     required this.valueText,
     required this.onDec,
     required this.onInc,
     required this.theme,
+    this.boxWidth,
   });
 
   @override
@@ -364,14 +359,17 @@ class _MinMaxColumn extends StatelessWidget {
             _SmallButton(icon: Icons.remove, onTap: onDec),
             const SizedBox(width: 6),
             Container(
-              width: 56,
+              width: boxWidth ?? 56,
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceVariant,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(valueText),
+              child: Text(
+                valueText,
+                textAlign: TextAlign.center,
+              ),
             ),
             const SizedBox(width: 6),
             _SmallButton(icon: Icons.add, onTap: onInc),

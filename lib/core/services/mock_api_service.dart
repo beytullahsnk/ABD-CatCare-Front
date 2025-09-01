@@ -8,8 +8,9 @@ class MockApiService {
   static const String notificationPrefsKey = 'notification_prefs';
 
   Future<bool> login(String email, String password) async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    return email.contains('@') && password.length >= 4;
+    await Future.delayed(const Duration(milliseconds: 300));
+    // Mock: autoriser des mdp plus courts pour faciliter les tests
+    return email.contains('@') && password.isNotEmpty;
   }
 
   Future<bool> register(User user) async {

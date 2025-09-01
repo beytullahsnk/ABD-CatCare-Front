@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
+import 'api_provider.dart';
+import 'mock_api_service.dart';
 
 /// Gestion simple de l'état d'authentification
 /// - Persistance via SharedPreferences (clé 'logged_in')
@@ -29,6 +31,19 @@ class AuthState {
   }
 
   Future<bool> signIn(String identifier, String password) async {
+    // Route vers mock si activé
+    if (ApiProvider.instance.useMock) {
+      final mock = MockApiService();
+      final ok = await mock.login(identifier, password);
+      if (ok) {
+        // Stocker un token factice pour satisfaire les headers éventuels
+        await AuthService.instance.saveTokens('mock-token', null);
+      }
+      await setLoggedIn(ok);
+      return ok;
+    }
+
+    // Sinon, vrai backend
     final ok = await AuthService.instance.login(identifier, password);
     await setLoggedIn(ok);
     return ok;

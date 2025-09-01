@@ -42,7 +42,10 @@ class AuthService {
 
   Future<bool> login(String emailOrUsername, String password) async {
     final body = {'identifier': emailOrUsername, 'password': password};
-    final resp = await ApiClient.instance.post('/auth/login', body);
+    // Ajoute un timeout pour éviter le chargement infini
+    final resp = await ApiClient.instance
+        .post('/auth/login', body)
+        .timeout(const Duration(seconds: 10));
     if (resp.statusCode == 200) {
       final data = jsonDecode(resp.body);
       final token =

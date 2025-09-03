@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
+import 'dart:convert';
 
 /// Gestion simple de l'état d'authentification
 /// - Persistance via SharedPreferences (clé 'logged_in')
@@ -16,12 +17,17 @@ class AuthState {
 
   /// Appelée après login API : stocke user et tokens, persiste et notifie
   Future<void> signInWithApiResponse(Map<String, dynamic> apiData) async {
-  _user = apiData['user'] as Map<String, dynamic>?;
-  _accessToken = apiData['tokens']?['accessToken'] as String?;
-  _refreshToken = apiData['tokens']?['refreshToken'] as String?;
-  // Persiste tokens
-  await AuthService.instance.saveTokens(_accessToken ?? '', _refreshToken);
-  await setLoggedIn(true);
+    _user = apiData['user'] as Map<String, dynamic>?;
+    _accessToken = apiData['tokens']?['accessToken'] as String?;
+    _refreshToken = apiData['tokens']?['refreshToken'] as String?;
+    // Persiste tokens
+    await AuthService.instance.saveTokens(_accessToken ?? '', _refreshToken);
+    // Persiste l'utilisateur
+    final sp = await SharedPreferences.getInstance();
+    if (_user != null) {
+      sp.setString('catcare_user', jsonEncode(_user));
+    }
+    await setLoggedIn(true);
   }
   AuthState._();
 
@@ -37,6 +43,18 @@ class AuthState {
     loggedIn.value = value;
     // load tokens as well (non-blocking)
     await AuthService.instance.loadTokens();
+  // Recharge les tokens persistés
+  _accessToken = AuthService.instance.persistedAccessToken;
+  _refreshToken = AuthService.instance.persistedRefreshToken;
+    // load user
+    final userStr = sp.getString('catcare_user');
+    if (userStr != null) {
+      try {
+        _user = Map<String, dynamic>.from(jsonDecode(userStr));
+      } catch (_) {
+        _user = null;
+      }
+    }
   }
 
   Future<void> setLoggedIn(bool value) async {

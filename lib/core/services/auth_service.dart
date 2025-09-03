@@ -4,6 +4,12 @@ import 'package:http/http.dart' as http;
 import 'api_client.dart';
 
 class AuthService {
+  String? get persistedAccessToken {
+    return _accessToken;
+  }
+  String? get persistedRefreshToken {
+    return _refreshToken;
+  }
   AuthService._();
   static final AuthService instance = AuthService._();
 

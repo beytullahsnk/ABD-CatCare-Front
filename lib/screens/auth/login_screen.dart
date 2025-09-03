@@ -62,8 +62,8 @@ class _LoginScreenState extends State<LoginScreen> {
   if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
         if (data['state'] == true) {
-          // Stocker les tokens et infos utilisateur si besoin
-          await AuthState.instance.signInWithApiResponse(data['data']);
+          // Stocker les tokens, infos utilisateur et email envoyé
+          await AuthState.instance.signInWithApiResponse(data['data'], rawEmail: _email.text.trim());
           if (!mounted) return;
           context.go('/dashboard');
         } else {

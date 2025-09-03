@@ -67,7 +67,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
         if (data['state'] == true) {
-          await AuthState.instance.signInWithApiResponse(data['data']);
+          await AuthState.instance.signInWithApiResponse(data['data'], rawEmail: _email.text.trim());
           if (!mounted) return;
           context.go('/dashboard');
         } else {

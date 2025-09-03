@@ -11,6 +11,10 @@ class ProfilePage extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
+  final user = AuthState.instance.user;
+  final username = user?['username'] ?? 'Nom utilisateur';
+  final email = user?['email'] ?? user?['encryptedEmail'] ?? 'adresse@exemple.com';
+
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
@@ -31,9 +35,9 @@ class ProfilePage extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Nom utilisateur', style: theme.textTheme.titleLarge),
+                  Text(username, style: theme.textTheme.titleLarge),
                   const SizedBox(height: 4),
-                  Text('adresse@exemple.com', style: theme.textTheme.bodySmall),
+                  Text(email, style: theme.textTheme.bodySmall),
                 ],
               ),
             ],

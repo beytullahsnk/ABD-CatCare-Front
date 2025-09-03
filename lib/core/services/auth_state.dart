@@ -16,8 +16,11 @@ class AuthState {
   String? get refreshToken => _refreshToken;
 
   /// Appelée après login API : stocke user et tokens, persiste et notifie
-  Future<void> signInWithApiResponse(Map<String, dynamic> apiData) async {
+  Future<void> signInWithApiResponse(Map<String, dynamic> apiData, {String? rawEmail}) async {
     _user = apiData['user'] as Map<String, dynamic>?;
+    if (_user != null && rawEmail != null) {
+      _user!['email'] = rawEmail;
+    }
     _accessToken = apiData['tokens']?['accessToken'] as String?;
     _refreshToken = apiData['tokens']?['refreshToken'] as String?;
     // Persiste tokens

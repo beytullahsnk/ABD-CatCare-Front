@@ -6,6 +6,23 @@ import 'auth_service.dart';
 /// - Persistance via SharedPreferences (clé 'logged_in')
 /// - Notifie le router pour recalculer les redirections
 class AuthState {
+  Map<String, dynamic>? _user;
+  String? _accessToken;
+  String? _refreshToken;
+
+  Map<String, dynamic>? get user => _user;
+  String? get accessToken => _accessToken;
+  String? get refreshToken => _refreshToken;
+
+  /// Appelée après login API : stocke user et tokens, persiste et notifie
+  Future<void> signInWithApiResponse(Map<String, dynamic> apiData) async {
+  _user = apiData['user'] as Map<String, dynamic>?;
+  _accessToken = apiData['tokens']?['accessToken'] as String?;
+  _refreshToken = apiData['tokens']?['refreshToken'] as String?;
+  // Persiste tokens
+  await AuthService.instance.saveTokens(_accessToken ?? '', _refreshToken);
+  await setLoggedIn(true);
+  }
   AuthState._();
 
   static const String _loggedInKey = 'logged_in';

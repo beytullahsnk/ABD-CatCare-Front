@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/auth_state.dart';
-import '../../core/services/api_provider.dart';
-// replaced mock API with real auth flow
-import '../../screens/widgets/input_field.dart';
 import '../../screens/widgets/primary_button.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,7 +17,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final _api = ApiProvider.instance.get();
   bool _submitting = false;
   bool _obscure = true;
 
@@ -51,21 +49,61 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _submitting = true);
-    final ok =
-        await AuthState.instance.signIn(_email.text.trim(), _password.text);
-    setState(() => _submitting = false);
-    if (ok) {
-      if (!mounted) return;
-      context.go('/dashboard');
-    } else {
+    try {
+      final response = await http.post(
+        Uri.parse('http://10.0.2.2:3000/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': _email.text.trim(),
+          'password': _password.text,
+        }),
+      );
+      final cs = Theme.of(context).colorScheme;
+  if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['state'] == true) {
+          // Stocker les tokens et infos utilisateur si besoin
+          await AuthState.instance.signInWithApiResponse(data['data']);
+          if (!mounted) return;
+          context.go('/dashboard');
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: cs.error,
+              content: Text(data['message'] ?? 'Identifiants invalides'),
+            ),
+          );
+        }
+      } else {
+        if (!mounted) return;
+        String errorMsg = 'Erreur serveur (${response.statusCode})';
+        try {
+          final errBody = response.body;
+          if (errBody.isNotEmpty) {
+            errorMsg += '\n' + errBody;
+            // Log pour debug
+            print('Erreur API login: $errBody');
+          }
+        } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: cs.error,
+            content: Text(errorMsg),
+          ),
+        );
+      }
+    } catch (e) {
       if (!mounted) return;
       final cs = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: cs.error,
-          content: const Text('Identifiants invalides'),
+          content: Text('Erreur: $e'),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 

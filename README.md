@@ -42,8 +42,6 @@ développement hors-ligne. Pour basculer vers l'API réelle :
 ApiClient.instance.baseUrl = 'http://localhost:3000/api';
 ```
 
-4. (Optionnel) Démarrer votre stack backend (voir section suivante).
-
 Remarque : `ApiProvider` retourne soit une instance du `MockApiService`, soit
 `RealApiService.instance`. Les écrans utilisent `ApiProvider.instance.get()` —
 pas besoin de modifier plusieurs fichiers.
@@ -109,3 +107,44 @@ flutter run
 et ici https://github.com/eltraore/ABD-CatCare/edit/dev/README.md
 - MQTT : broker et mapping des RuuviTag dans le service `MqttService` du backend
 
+## Flux de connexion ( a test )
+
+### Flux de connection
+
+- L’écran appelle AuthState.signIn(identifier, password).
+- Cela délègue à AuthService.login() qui fait POST /auth/login via ApiClient.
+La réponse JSON est parsée pour récupérer :
+
+```json
+accessToken (ou token/access_token)
+refreshToken (ou refresh_token)
+```
+
+AuthService.saveTokens() stocke ces valeurs dans SharedPreferences:
+- catcare_token, catcare_refresh
+
+ AuthState.setLoggedIn(true) enregistre aussi logged_in=true (clé SharedPreferences) et déclenche loggedIn (ValueNotifier) pour le router.
+
+### Au démarrage de l'app
+
+- main.dart appelle AuthState.load() avant runApp.
+- AuthState.load():
+- lit logged_in et met à jour loggedIn (influence go_router)
+- charge les tokens en mémoire via AuthService.loadTokens() (pour préparer le header auth).
+
+### Appels protégés avec le token
+ - AuthService.authHeader construit {'Authorization': 'Bearer <accessToken>'}.
+ -Les services réels (ex: RealApiService) passent ce header aux méthodes d’ApiClient:
+ApiClient.get/post/put/delete(path, headers: AuthService.instance.authHeader).
+
+Refresh token : pas test ni dev
+
+AuthService.authGet() TODO si r.statusCode == 401: appeler un endpoint de refresh, sauvegarder le nouveau token, rejouer la requête.
+À prévoir: POST /auth/refresh (ou équivalent backend), mise à jour des tokens, puis retry.
+
+
+### Déconnexion
+
+AuthState.signOut():
+AuthService.logout() supprime les clés catcare_token/catcare_refresh.
+setLoggedIn(false) met logged_in=false et notifie le router.

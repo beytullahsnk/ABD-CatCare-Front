@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/services/auth_state.dart';
-import '../../core/services/api_provider.dart';
 import '../../models/user.dart';
 import '../../models/cat.dart';
 import '../../screens/widgets/primary_button.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -23,7 +24,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _catName = TextEditingController();
   String? _selectedImagePath;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final _api = ApiProvider.instance.get();
   bool _submitting = false;
   bool _obscure = true;
 
@@ -52,30 +52,61 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _submitting = true);
-
-    final user = User(
-      id: UniqueKey().toString(),
-      name: '${_firstName.text.trim()} ${_lastName.text.trim()}',
-      email: _email.text.trim(),
-    );
-    final cat = Cat(
-      id: UniqueKey().toString(),
-      name: _catName.text.trim(),
-      ageMonths: 0,
-      breed: null,
-    );
-
-    final ok = await _api.register(user);
-    setState(() => _submitting = false);
-    if (ok) {
-      await AuthState.instance.setLoggedIn(true);
-      if (!mounted) return;
-      context.go('/settings/notifications');
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Echec de l'inscription")),
+    try {
+      final response = await http.post(
+        Uri.parse('http://10.0.2.2:3000/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': _email.text.trim(),
+          'username': (_firstName.text.trim() + '.' + _lastName.text.trim()).replaceAll(' ', ''),
+          'phoneNumber': _phone.text.trim(),
+          'password': _password.text,
+        }),
       );
+      final cs = Theme.of(context).colorScheme;
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data['state'] == true) {
+          await AuthState.instance.signInWithApiResponse(data['data'], rawEmail: _email.text.trim());
+          if (!mounted) return;
+          context.go('/dashboard');
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: cs.error,
+              content: Text(data['message'] ?? "Echec de l'inscription"),
+            ),
+          );
+        }
+      } else {
+        if (!mounted) return;
+        String errorMsg = "Erreur serveur (${response.statusCode})";
+        try {
+          final errBody = response.body;
+          if (errBody.isNotEmpty) {
+            errorMsg += '\n' + errBody;
+            print('Erreur API register: $errBody');
+          }
+        } catch (_) {}
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: cs.error,
+            content: Text(errorMsg),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final cs = Theme.of(context).colorScheme;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: cs.error,
+          content: Text('Erreur: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 

@@ -13,6 +13,7 @@ import '../screens/notifications/notifications.dart';
 import '../screens/about/about_screen.dart';
 import '../screens/settings/litter_settings_page.dart';
 import '../screens/settings/environment_settings_page.dart';
+import '../screens/add_cat/add_cat_page.dart';
 import '../screens/settings/activity_settings_page.dart';
 
 class AppRouter {
@@ -107,6 +108,11 @@ class AppRouter {
         path: '/profile',
         name: 'profile',
         builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: '/add-cat',
+        name: 'addCat',
+        builder: (context, state) => const AddCatPage(),
       ),
     ],
   );

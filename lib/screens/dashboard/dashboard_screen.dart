@@ -328,14 +328,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
 
-      // Barre de navigation visible **uniquement** sur le Dashboard
+      // Barre de navigation + bouton flottant centré
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
+          if (index == 2) {
+            // Bouton Ajouter un chat
+            context.pushNamed('add_cat');
+            return;
+          }
           setState(() => _currentIndex = index);
           switch (index) {
             case 0:
-              // déjà sur le dashboard
               break;
             case 1:
               context.pushNamed('litter').then((_) {
@@ -343,14 +347,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 setState(() => _currentIndex = 0);
               });
               break;
-            case 2:
-              // open environment overview via named route
+            case 3:
               context.pushNamed('environment').then((_) {
                 if (!mounted) return;
                 setState(() => _currentIndex = 0);
               });
               break;
-            case 3:
+            case 4:
               context.pushNamed('activity').then((_) {
                 if (!mounted) return;
                 setState(() => _currentIndex = 0);
@@ -359,26 +362,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
         },
         type: BottomNavigationBarType.fixed,
-        // show labels for clarity
         showSelectedLabels: true,
         showUnselectedLabels: true,
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             label: 'Accueil',
           ),
-          BottomNavigationBarItem(
-            // Litière: utiliser une icône de bac/boîte
+          const BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2),
             label: 'Bac à litière',
           ),
           BottomNavigationBarItem(
-            // Environnement: température/thermostat
+            icon: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(8),
+              child: const Icon(Icons.add, color: Colors.white, size: 32),
+            ),
+            label: 'Ajouter Chat',
+          ),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.thermostat_outlined),
             label: 'Environnement',
           ),
-          BottomNavigationBarItem(
-            // Activité: chat/patte (pets)
+          const BottomNavigationBarItem(
             icon: Icon(Icons.pets),
             label: 'Activité',
           ),

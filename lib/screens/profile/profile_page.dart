@@ -150,7 +150,7 @@ class ProfilePage extends StatelessWidget {
           // Déconnexion rapide
           TextButton.icon(
             onPressed: () async {
-              await AuthState.instance.setLoggedIn(false);
+              await AuthState.instance.signOut();
               context.push('/login');
             },
             icon: const Icon(Icons.logout),

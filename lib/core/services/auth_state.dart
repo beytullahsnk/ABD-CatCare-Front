@@ -73,7 +73,12 @@ class AuthState {
   }
 
   Future<void> signOut() async {
-    await AuthService.instance.logout();
-    await setLoggedIn(false);
+  await AuthService.instance.logout();
+  final sp = await SharedPreferences.getInstance();
+  await sp.remove('catcare_user');
+  _user = null;
+  _accessToken = null;
+  _refreshToken = null;
+  await setLoggedIn(false);
   }
 }

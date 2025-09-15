@@ -1,9 +1,20 @@
+
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
 
+
 class AuthService {
+
+  /// Récupère l'utilisateur courant et ses chats (call /users/me)
+  Future<Map<String, dynamic>?> fetchUserWithCats() async {
+    final resp = await ApiClient.instance.get('/users/me', headers: authHeader);
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      return jsonDecode(resp.body) as Map<String, dynamic>;
+    }
+    return null;
+  }
   String? get persistedAccessToken {
     return _accessToken;
   }
@@ -43,7 +54,7 @@ class AuthService {
 
   Map<String, String> get authHeader {
     if (_accessToken == null) return {};
-    return {'Authorization': 'Bearer $_accessToken'};
+    return {'Authorization': 'Bearer $_refreshToken'};
   }
 
   Future<bool> login(String emailOrUsername, String password) async {

@@ -1,4 +1,5 @@
 import 'package:abd_petcare/core/services/auth_state.dart';
+import 'package:abd_petcare/core/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -12,40 +13,27 @@ class EditCatPage extends StatefulWidget {
 
 class _EditCatPageState extends State<EditCatPage> {
   Future<void> _fetchAndPrefillFirstCat() async {
-    final token = AuthState.instance.refreshToken;
     try {
-      final response = await http.get(
-        Uri.parse('http://10.0.2.2:3000/users/me'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final data = jsonDecode(response.body);
-        final cats = data['extras']?['cats'] as List?;
-        if (cats != null && cats.isNotEmpty) {
-          final cat = Map<String, dynamic>.from(cats.first);
-          setState(() {
-            _catData = cat;
-            _nameController.text = cat['name'] ?? '';
-            _breedController.text = cat['breed'] ?? '';
-            _birthDateController.text = cat['birthDate'] ?? '';
-            _weightController.text = cat['weight']?.toString() ?? '';
-            _colorController.text = cat['color'] ?? '';
-            _genderController.text = cat['gender'] ?? '';
-            _healthNotesController.text = cat['healthNotes'] ?? '';
-            _userIdController.text = cat['userId'] ?? '';
-            _sensorIdController.text = cat['sensorId'] ?? '';
-            _statusController.text = cat['status'] ?? '';
-            // ...no thresholds...
-          });
-        }
-      } else {
-        print('Erreur API /users/me: ${response.statusCode} - ${response.body}');
+      final data = await AuthService.instance.fetchUserWithCats();
+      final cats = data?['extras']?['cats'] as List?;
+      if (cats != null && cats.isNotEmpty) {
+        final cat = Map<String, dynamic>.from(cats.first);
+        setState(() {
+          _catData = cat;
+          _nameController.text = cat['name'] ?? '';
+          _breedController.text = cat['breed'] ?? '';
+          _birthDateController.text = cat['birthDate'] ?? '';
+          _weightController.text = cat['weight']?.toString() ?? '';
+          _colorController.text = cat['color'] ?? '';
+          _genderController.text = cat['gender'] ?? '';
+          _healthNotesController.text = cat['healthNotes'] ?? '';
+          _userIdController.text = cat['userId'] ?? '';
+          _sensorIdController.text = cat['sensorId'] ?? '';
+          _statusController.text = cat['status'] ?? '';
+        });
       }
     } catch (e) {
-      print('Erreur réseau /users/me: $e');
+      print('Erreur fetchUserWithCats: $e');
     }
   }
 

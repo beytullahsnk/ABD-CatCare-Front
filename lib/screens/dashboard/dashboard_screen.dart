@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import '../../core/services/api_provider.dart';
 import '../../core/services/auth_state.dart';
+import '../../core/services/auth_service.dart';
 import '../widgets/section_header.dart';
 import '../widgets/metric_tile.dart';
 import '../../core/constants/app_constants.dart';
@@ -78,39 +79,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchAndLogFirstCat() async {
-  // Après avoir fetch le chat, fetch les alertes capteur
-    final token = AuthState.instance.refreshToken;
+    // Après avoir fetch le chat, fetch les alertes capteur
     try {
-      final response = await http.get(
-        Uri.parse('http://10.0.2.2:3000/users/me'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final data = jsonDecode(response.body);
-        final cats = data['extras']?['cats'] as List?;
-        if (cats != null && cats.isNotEmpty) {
-          setState(() {
-            _firstCat = Map<String, dynamic>.from(cats.first);
-          });
-          print('Premier chat: ${cats.first}');
-          await _fetchSensorData(_firstCat!['id']);
-        } else {
-          setState(() {
-            _firstCat = null;
-            _sensorData = null;
-          });
-          print('Aucun chat trouvé dans la réponse.');
-        }
+      final data = await AuthService.instance.fetchUserWithCats();
+      final cats = data?['extras']?['cats'] as List?;
+      if (cats != null && cats.isNotEmpty) {
+        setState(() {
+          _firstCat = Map<String, dynamic>.from(cats.first);
+        });
+        print('Premier chat: ${cats.first}');
+        await _fetchSensorData(_firstCat!['id']);
       } else {
-        print('Erreur API /users/me: ${response.statusCode} - ${response.body}');
+        setState(() {
+          _firstCat = null;
+          _sensorData = null;
+        });
+        print('Aucun chat trouvé dans la réponse.');
       }
     } catch (e) {
-      print('Erreur réseau /users/me: $e');
+      print('Erreur fetchUserWithCats: $e');
     }
-
   }
 
   Future<void> _fetchSensorData(String catId) async {

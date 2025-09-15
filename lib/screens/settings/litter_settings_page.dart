@@ -1,21 +1,106 @@
+
 import 'package:flutter/material.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/api_client.dart';
 
 class LitterPageSettings extends StatefulWidget {
-  const LitterPageSettings({super.key});
+  const LitterPageSettings({Key? key}) : super(key: key);
 
   @override
   State<LitterPageSettings> createState() => _LitterPageState();
 }
 
 class _LitterPageState extends State<LitterPageSettings> {
-  int humidity = 40;
-  int passages = 3;
+  int? humidity;
+  int? passages;
   bool notifications = true;
+  bool loading = true;
+  String? error;
+  Map<String, dynamic>? _catThresholds;
+  String? _catId;
 
-  void incHumidity() => setState(() => humidity = (humidity + 1).clamp(0, 100));
-  void decHumidity() => setState(() => humidity = (humidity - 1).clamp(0, 100));
-  void incPassages() => setState(() => passages = passages + 1);
-  void decPassages() => setState(() => passages = (passages - 1).clamp(0, 999));
+  @override
+  void initState() {
+    super.initState();
+    _fetchLitterThresholds();
+  }
+
+  Future<void> _fetchLitterThresholds() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final userResp = await AuthService.instance.fetchUserWithCats();
+      if (userResp == null || userResp['extras'] == null || userResp['extras']['cats'] == null || (userResp['extras']['cats'] as List).isEmpty) {
+        setState(() {
+          error = "Aucun chat trouvé.";
+          loading = false;
+        });
+        return;
+      }
+      final firstCat = (userResp['extras']['cats'] as List).first;
+      final thresholds = firstCat['activityThresholds'] as Map<String, dynamic>?;
+      final litter = thresholds?['litter'] as Map<String, dynamic>?;
+      setState(() {
+        humidity = litter?['humidityMax'] ?? 40;
+        passages = litter?['dailyUsageMax'] ?? 3;
+        _catThresholds = thresholds;
+        _catId = firstCat['id'] as String?;
+        loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        error = "Erreur lors du chargement.";
+        loading = false;
+      });
+    }
+  }
+
+  Future<void> _updateThresholds({int? newHumidity, int? newPassages}) async {
+    if (_catId == null || _catThresholds == null) return;
+    final collar = Map<String, dynamic>.from(_catThresholds!['collar'] ?? {});
+    final environment = Map<String, dynamic>.from(_catThresholds!['environment'] ?? {});
+    final litter = Map<String, dynamic>.from(_catThresholds!['litter'] ?? {});
+    if (newHumidity != null) litter['humidityMax'] = newHumidity;
+    if (newPassages != null) litter['dailyUsageMax'] = newPassages;
+    // Correction: dailyUsageMin ne doit jamais être null
+    if (litter['dailyUsageMin'] == null) litter['dailyUsageMin'] = 1;
+    final body = {
+      'collar': collar,
+      'environment': environment,
+      'litter': litter,
+    };
+  await ApiClient.instance.updateCatThresholds(_catId!, body, headers: AuthService.instance.authHeader);
+    setState(() {
+      _catThresholds = {
+        'collar': collar,
+        'environment': environment,
+        'litter': litter,
+      };
+    });
+  }
+
+  void incHumidity() {
+    final newValue = ((humidity ?? 0) + 1).clamp(0, 100);
+    setState(() => humidity = newValue);
+    _updateThresholds(newHumidity: newValue);
+  }
+  void decHumidity() {
+    final newValue = ((humidity ?? 0) - 1).clamp(0, 100);
+    setState(() => humidity = newValue);
+    _updateThresholds(newHumidity: newValue);
+  }
+  void incPassages() {
+    final newValue = ((passages ?? 0) + 1);
+    setState(() => passages = newValue);
+    _updateThresholds(newPassages: newValue);
+  }
+  void decPassages() {
+    final newValue = ((passages ?? 0) - 1).clamp(0, 999);
+    setState(() => passages = newValue);
+    _updateThresholds(newPassages: newValue);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,85 +113,75 @@ class _LitterPageState extends State<LitterPageSettings> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SettingCard(
-              icon: Icons.water_drop,
-              title: "Seuil d'alerte du taux d'humidité",
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _SmallButton(icon: Icons.remove, onTap: decHumidity),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 80,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceVariant,
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text('$humidity%'),
+        child: loading
+            ? const Center(child: CircularProgressIndicator())
+            : error != null
+                ? Center(child: Text(error!, style: const TextStyle(color: Colors.red)))
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SettingCard(
+                        icon: Icons.water_drop,
+                        title: "Seuil d'alerte du taux d'humidité",
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            _SmallButton(icon: Icons.remove, onTap: decHumidity),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 80,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(8)),
+                              child: Text(humidity != null ? '$humidity%' : '-'),
+                            ),
+                            const SizedBox(width: 8),
+                            _SmallButton(icon: Icons.add, onTap: incHumidity),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _SettingCard(
+                        icon: Icons.directions_walk,
+                        title: 'Seuil de passages',
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            _SmallButton(icon: Icons.remove, onTap: decPassages),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 60,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(8)),
+                              child: Text(passages != null ? '$passages' : '-'),
+                            ),
+                            const SizedBox(width: 8),
+                            _SmallButton(icon: Icons.add, onTap: incPassages),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text('Notifications',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.notifications_none),
+                          const SizedBox(width: 12),
+                          const Expanded(child: Text('Notifications push')),
+                          Switch(
+                              value: notifications,
+                              onChanged: (v) => setState(() => notifications = v)),
+                        ],
+                      ),
+                      const Spacer(),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  _SmallButton(icon: Icons.add, onTap: incHumidity),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _SettingCard(
-              icon: Icons.directions_walk,
-              title: 'Seuil de passages',
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _SmallButton(icon: Icons.remove, onTap: decPassages),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 60,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceVariant,
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text('$passages'),
-                  ),
-                  const SizedBox(width: 8),
-                  _SmallButton(icon: Icons.add, onTap: incPassages),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text('Notifications',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.notifications_none),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Notifications push')),
-                Switch(
-                    value: notifications,
-                    onChanged: (v) => setState(() => notifications = v)),
-              ],
-            ),
-            const Spacer(),
-            ElevatedButton(
-              onPressed: () {
-                final cs = Theme.of(context).colorScheme;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: const Text('Paramètres Litière enregistrés'),
-                      backgroundColor: cs.secondary),
-                );
-              },
-              child: const SizedBox(
-                width: double.infinity,
-                child: Center(child: Text('Enregistrer')),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

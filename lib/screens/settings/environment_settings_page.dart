@@ -1,6 +1,10 @@
 // lib/screens/environnement/environment_settings_page.dart
+import 'package:abd_petcare/core/services/api_client.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+
+
+import '../../core/services/auth_service.dart';
 
 class EnvironmentSettingsPage extends StatefulWidget {
   const EnvironmentSettingsPage({super.key});
@@ -11,104 +15,118 @@ class EnvironmentSettingsPage extends StatefulWidget {
 }
 
 class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
-  static const String _kMinKey = 'env_min';
-  static const String _kMaxKey = 'env_max';
-  static const String _kThresholdKey = 'env_threshold';
-  static const String _kNotifKey = 'env_notifications';
-  // humidity and pressure keys
-  static const String _kHumMinKey = 'env_hum_min';
-  static const String _kHumMaxKey = 'env_hum_max';
-  static const String _kHumSustainedKey = 'env_hum_sustained_min';
-  static const String _kPressureChangeKey = 'env_pressure_change_hpa';
-  static const String _kPressureSustainedKey = 'env_pressure_sustained_min';
 
   int tempMin = 0;
-  int tempMax = 30;
-  int tempThreshold = 30;
-  int humMin = 30;
-  int humMax = 60;
-  int humSustainedMin = 20; // minutes
-  int pressureChangeHpa = 5;
-  int pressureSustainedMin = 60; // minutes
+  int tempMax = 0;
+  int humMin = 0;
+  int humMax = 0;
   bool notifications = true;
   bool _loading = true;
-  bool _saving = false;
+  String? _catId;
+  Map<String, dynamic>? _catThresholds;
 
   @override
   void initState() {
     super.initState();
-    _loadPrefs();
+    _fetchEnvThresholds();
   }
 
-  Future<void> _loadPrefs() async {
-    final sp = await SharedPreferences.getInstance();
+  Future<void> _fetchEnvThresholds() async {
+    setState(() => _loading = true);
+    try {
+      final userResp = await AuthService.instance.fetchUserWithCats();
+      final cats = userResp?['extras']?['cats'] as List?;
+      if (cats == null || cats.isEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
+      final firstCat = cats.first;
+      final thresholds = firstCat['activityThresholds'] as Map<String, dynamic>?;
+      final env = thresholds?['environment'] as Map<String, dynamic>?;
+      setState(() {
+        tempMin = env?['temperatureMin'] ?? 0;
+        tempMax = env?['temperatureMax'] ?? 0;
+  // tempThreshold supprimé
+        humMin = env?['humidityMin'] ?? 0;
+        humMax = env?['humidityMax'] ?? 0;
+        _catId = firstCat['id'] as String?;
+        _catThresholds = thresholds;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _updateEnvThresholds({int? newTempMin, int? newTempMax, int? newHumMin, int? newHumMax}) async {
+    if (_catId == null || _catThresholds == null) return;
+    final collar = Map<String, dynamic>.from(_catThresholds!['collar'] ?? {});
+    final environment = Map<String, dynamic>.from(_catThresholds!['environment'] ?? {});
+    final litter = Map<String, dynamic>.from(_catThresholds!['litter'] ?? {});
+    if (newTempMin != null) environment['temperatureMin'] = newTempMin;
+    if (newTempMax != null) environment['temperatureMax'] = newTempMax;
+    if (newHumMin != null) environment['humidityMin'] = newHumMin;
+    if (newHumMax != null) environment['humidityMax'] = newHumMax;
+    if (litter['dailyUsageMin'] == null) litter['dailyUsageMin'] = 1;
+    final body = {
+      'collar': collar,
+      'environment': environment,
+      'litter': litter,
+    };
+    print('Updating thresholds with body: $body');
+    await ApiClient.instance.updateCatThresholds(_catId!, body, headers: AuthService.instance.authHeader);
     setState(() {
-      tempMin = sp.getInt(_kMinKey) ?? tempMin;
-      tempMax = sp.getInt(_kMaxKey) ?? tempMax;
-      tempThreshold = sp.getInt(_kThresholdKey) ?? tempThreshold;
-      notifications = sp.getBool(_kNotifKey) ?? notifications;
-      // load humidity & pressure
-      humMin = sp.getInt(_kHumMinKey) ?? humMin;
-      humMax = sp.getInt(_kHumMaxKey) ?? humMax;
-      humSustainedMin = sp.getInt(_kHumSustainedKey) ?? humSustainedMin;
-      pressureChangeHpa = sp.getInt(_kPressureChangeKey) ?? pressureChangeHpa;
-      pressureSustainedMin =
-          sp.getInt(_kPressureSustainedKey) ?? pressureSustainedMin;
-      _loading = false;
+      _catThresholds = {
+        'collar': collar,
+        'environment': environment,
+        'litter': litter,
+      };
     });
   }
 
-  Future<void> _savePrefs() async {
-    setState(() => _saving = true);
-    final sp = await SharedPreferences.getInstance();
-    await sp.setInt(_kMinKey, tempMin);
-    await sp.setInt(_kMaxKey, tempMax);
-    await sp.setInt(_kThresholdKey, tempThreshold);
-    await sp.setInt(_kHumMinKey, humMin);
-    await sp.setInt(_kHumMaxKey, humMax);
-    await sp.setInt(_kHumSustainedKey, humSustainedMin);
-    await sp.setInt(_kPressureChangeKey, pressureChangeHpa);
-    await sp.setInt(_kPressureSustainedKey, pressureSustainedMin);
-    await sp.setBool(_kNotifKey, notifications);
-    if (!mounted) return;
-    setState(() => _saving = false);
-    final cs = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Paramètres Environnement enregistrés'),
-        backgroundColor: cs.secondary,
-      ),
-    );
+  // Suppression de la sauvegarde locale, tout est initialisé via l'API
+
+  void incMin() {
+    final newValue = (tempMin + 1).clamp(-50, tempMax);
+    setState(() => tempMin = newValue);
+    _updateEnvThresholds(newTempMin: newValue);
   }
-
-  void incMin() => setState(() => tempMin = (tempMin + 1).clamp(-50, tempMax));
-  void decMin() => setState(() => tempMin = (tempMin - 1).clamp(-50, tempMax));
-  void incMax() => setState(() => tempMax = (tempMax + 1).clamp(tempMin, 100));
-  void decMax() => setState(() => tempMax = (tempMax - 1).clamp(tempMin, 100));
-  void incThresh() =>
-      setState(() => tempThreshold = (tempThreshold + 1).clamp(-50, 100));
-  void decThresh() =>
-      setState(() => tempThreshold = (tempThreshold - 1).clamp(-50, 100));
-
-  // humidity helpers
-  void incHumMin() => setState(() => humMin = (humMin + 1).clamp(0, humMax));
-  void decHumMin() => setState(() => humMin = (humMin - 1).clamp(0, humMax));
-  void incHumMax() => setState(() => humMax = (humMax + 1).clamp(humMin, 100));
-  void decHumMax() => setState(() => humMax = (humMax - 1).clamp(humMin, 100));
-  void incHumSust() =>
-      setState(() => humSustainedMin = (humSustainedMin + 5).clamp(0, 1440));
-  void decHumSust() =>
-      setState(() => humSustainedMin = (humSustainedMin - 5).clamp(0, 1440));
-
-  // pressure helpers
-  void incPressureChange() =>
-      setState(() => pressureChangeHpa = (pressureChangeHpa + 1).clamp(0, 100));
-  void decPressureChange() =>
-      setState(() => pressureChangeHpa = (pressureChangeHpa - 1).clamp(0, 100));
-  void incPressureSust() => setState(
-      () => pressureSustainedMin = (pressureSustainedMin + 10).clamp(0, 1440));
-  void decPressureSust() => setState(
-      () => pressureSustainedMin = (pressureSustainedMin - 10).clamp(0, 1440));
+  void decMin() {
+    final newValue = (tempMin - 1).clamp(-50, tempMax);
+    setState(() => tempMin = newValue);
+    _updateEnvThresholds(newTempMin: newValue);
+  }
+  void incMax() {
+    final newValue = (tempMax + 1).clamp(tempMin, 100);
+    setState(() => tempMax = newValue);
+    _updateEnvThresholds(newTempMax: newValue);
+  }
+  void decMax() {
+    final newValue = (tempMax - 1).clamp(tempMin, 100);
+    setState(() => tempMax = newValue);
+    _updateEnvThresholds(newTempMax: newValue);
+  }
+  // incThresh/decThresh supprimés
+  void incHumMin() {
+    final newValue = (humMin + 1).clamp(0, humMax);
+    setState(() => humMin = newValue);
+    _updateEnvThresholds(newHumMin: newValue);
+  }
+  void decHumMin() {
+    final newValue = (humMin - 1).clamp(0, humMax);
+    setState(() => humMin = newValue);
+    _updateEnvThresholds(newHumMin: newValue);
+  }
+  void incHumMax() {
+    final newValue = (humMax + 1).clamp(humMin, 100);
+    setState(() => humMax = newValue);
+    _updateEnvThresholds(newHumMax: newValue);
+  }
+  void decHumMax() {
+    final newValue = (humMax - 1).clamp(humMin, 100);
+    setState(() => humMax = newValue);
+    _updateEnvThresholds(newHumMax: newValue);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -140,24 +158,13 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
                   ),
                   _SettingCard(
                     icon: Icons.thermostat_auto,
-                    title: 'Seuil de température maximum',
-                    child: Row(
-                      children: [
-                        _SmallButton(icon: Icons.remove, onTap: decThresh),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 80,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceVariant,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text('$tempThreshold°C'),
-                        ),
-                        const SizedBox(width: 8),
-                        _SmallButton(icon: Icons.add, onTap: incThresh),
-                      ],
+                    title: 'Température maximum',
+                    child: _MinMaxColumn(
+                      label: 'Max',
+                      valueText: '$tempMax°C',
+                      onDec: decMax,
+                      onInc: incMax,
+                      theme: theme,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -166,37 +173,25 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
 
                   _SettingCard(
                     icon: Icons.water_drop,
-                    title: 'Plage d\'humidit\u00e9 (min / max)',
+                    title: 'Humidité minimum',
                     child: _MinMaxColumn(
-                      label: 'Hum',
-                      valueText: '$humMin% - $humMax%',
+                      label: 'Min',
+                      valueText: '$humMin%',
                       onDec: decHumMin,
-                      onInc: incHumMax,
+                      onInc: incHumMin,
                       theme: theme,
-                      boxWidth: 130,
                     ),
                   ),
                   const SizedBox(height: 12),
                   _SettingCard(
-                    icon: Icons.timer,
-                    title: 'Durée soutenue avant alerte (humidité)',
-                    child: Row(
-                      children: [
-                        _SmallButton(icon: Icons.remove, onTap: decHumSust),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 80,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceVariant,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text('$humSustainedMin min'),
-                        ),
-                        const SizedBox(width: 8),
-                        _SmallButton(icon: Icons.add, onTap: incHumSust),
-                      ],
+                    icon: Icons.water_drop_outlined,
+                    title: 'Humidité maximum',
+                    child: _MinMaxColumn(
+                      label: 'Max',
+                      valueText: '$humMax%',
+                      onDec: decHumMax,
+                      onInc: incHumMax,
+                      theme: theme,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -257,31 +252,7 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
                     ],
                   ),
                   const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Stack(
-                      alignment: Alignment.centerRight,
-                      children: [
-                        ElevatedButton(
-                          onPressed: _saving ? null : _savePrefs,
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(
-                                48), // force la pleine largeur
-                          ),
-                          child: const Text('Enregistrer'),
-                        ),
-                        if (_saving)
-                          const Positioned(
-                            right: 16,
-                            child: SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+                  // Save button supprimé, tout est géré par l'API
                 ],
               ),
             ),
@@ -337,14 +308,12 @@ class _MinMaxColumn extends StatelessWidget {
   final VoidCallback onDec;
   final VoidCallback onInc;
   final ThemeData theme;
-  final double? boxWidth;
   const _MinMaxColumn({
     required this.label,
     required this.valueText,
     required this.onDec,
     required this.onInc,
     required this.theme,
-    this.boxWidth,
   });
 
   @override
@@ -359,7 +328,7 @@ class _MinMaxColumn extends StatelessWidget {
             _SmallButton(icon: Icons.remove, onTap: onDec),
             const SizedBox(width: 6),
             Container(
-              width: boxWidth ?? 56,
+              width: 56,
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(

@@ -39,4 +39,11 @@ class ApiClient {
     final h = {...defaultHeaders, if (headers != null) ...headers};
     return http.delete(uri, headers: h);
   }
+
+  Future<bool> updateCatThresholds(String catId, Map<String, dynamic> thresholds, {Map<String, String>? headers}) async {
+    print('Updating thresholds for cat $catId with data: $thresholds');
+    final resp = await put('/cats/$catId/thresholds', thresholds, headers: headers);
+    print('Response status: ${resp.body}');
+    return resp.statusCode >= 200 && resp.statusCode < 300;
+  }
 }

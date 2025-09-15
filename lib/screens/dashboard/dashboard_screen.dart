@@ -103,26 +103,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _fetchSensorData(String catId) async {
     await _fetchSensorAlerts(catId);
-    final token = AuthState.instance.accessToken;
-    try {
-      final response = await http.get(
-        Uri.parse('http://10.0.2.2:3000/sensors/latest/$catId'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-      );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _sensorData = data['data'] as Map<String, dynamic>?;
-        });
-        print('Sensor data: ${data['data']}');
-      } else {
-        print('Erreur API /sensors/latest/$catId: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e) {
-      print('Erreur réseau /sensors/latest/$catId: $e');
+    final api = ApiProvider.instance.get();
+    final data = await api.fetchLatestSensorData(catId);
+    setState(() {
+      _sensorData = data;
+    });
+    if (data != null) {
+      print('Sensor data: $data');
     }
   }
   late Future<Map<String, dynamic>> _futureMetrics;

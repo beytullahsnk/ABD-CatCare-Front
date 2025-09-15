@@ -1,8 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../core/services/api_provider.dart';
 
-class EnvironmentPage extends StatelessWidget {
+class EnvironmentPage extends StatefulWidget {
   const EnvironmentPage({super.key});
+
+  @override
+  State<EnvironmentPage> createState() => _EnvironmentPageState();
+}
+
+class _EnvironmentPageState extends State<EnvironmentPage> {
+  double? _temperature;
+  int? _humidity;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSensorData();
+  }
+
+  Future<void> _fetchSensorData() async {
+    final api = ApiProvider.instance.get();
+    final data = await api.fetchLatestSensorData(api.defaultCatId);
+    setState(() {
+      _temperature = data != null && data['temperature'] != null ? (data['temperature'] as num).toDouble() : null;
+      _humidity = data != null && data['humidity'] != null ? (data['humidity'] as num).toInt() : null;
+      _loading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,20 +48,31 @@ class EnvironmentPage extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _InfoCard(title: "Température", value: "22°C"),
-                _InfoCard(title: "Humidité", value: "55%"),
+                _InfoCard(
+                  title: "Température",
+                  value: _loading
+                      ? "..."
+                      : _temperature != null
+                          ? "${_temperature!.toStringAsFixed(1)}°C"
+                          : "-",
+                ),
+                _InfoCard(
+                  title: "Humidité",
+                  value: _loading
+                      ? "..."
+                      : _humidity != null
+                          ? "${_humidity!.toString()}%"
+                          : "-",
+                ),
               ],
             ),
             const SizedBox(height: 20),
-
-            // Historique
-            const Text("Historique",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            // ...existing code...
+            const Text("Historique", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-
             _ChartSection(
               title: "Température",
-              value: "22°C",
+              value: _temperature != null ? "${_temperature!.toStringAsFixed(1)}°C" : "-",
               variation: "+2%",
               isPositive: true,
               spots: [
@@ -49,10 +86,9 @@ class EnvironmentPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-
             _ChartSection(
               title: "Humidité",
-              value: "55%",
+              value: _humidity != null ? "${_humidity!.toString()}%" : "-",
               variation: "-1%",
               isPositive: false,
               spots: [
@@ -66,12 +102,9 @@ class EnvironmentPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-
-            // Alertes
-            const Text("Alertes",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            // ...existing code...
+            const Text("Alertes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-
             _AlertCard(
               icon: Icons.thermostat,
               title: "Température élevée",

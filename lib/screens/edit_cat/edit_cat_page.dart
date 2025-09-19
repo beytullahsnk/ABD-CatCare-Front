@@ -1,3 +1,4 @@
+import 'package:abd_petcare/core/services/api_client.dart';
 import 'package:abd_petcare/core/services/auth_state.dart';
 import 'package:abd_petcare/core/services/auth_service.dart';
 import 'package:flutter/material.dart';
@@ -44,6 +45,7 @@ class _EditCatPageState extends State<EditCatPage> {
       _fetchAndPrefillFirstCat();
     }
   }
+
   final _userIdController = TextEditingController();
   final _sensorIdController = TextEditingController();
   final _statusController = TextEditingController();
@@ -81,7 +83,7 @@ class _EditCatPageState extends State<EditCatPage> {
         _userIdController.text = args['userId'] ?? '';
         _sensorIdController.text = args['sensorId'] ?? '';
         _statusController.text = args['status'] ?? '';
-  // ...no thresholds...
+        // ...no thresholds...
       });
     } else {
       _fetchAndPrefillFirstCat();
@@ -90,9 +92,9 @@ class _EditCatPageState extends State<EditCatPage> {
 
   @override
   void dispose() {
-  _userIdController.dispose();
-  _sensorIdController.dispose();
-  _statusController.dispose();
+    _userIdController.dispose();
+    _sensorIdController.dispose();
+    _statusController.dispose();
     _nameController.dispose();
     _breedController.dispose();
     _birthDateController.dispose();
@@ -129,17 +131,18 @@ class _EditCatPageState extends State<EditCatPage> {
     // print updatedCat
     print('DEBUG: updatedCat = [32m${updatedCat.toString()}[0m');
     final catId = _catData?['id'];
-    final token = AuthState.instance.refreshToken;
-    http
+
+    // ▼▼▼ MODIFIÉ ICI ▼▼▼
+    // Utilise ApiClient pour garantir la bonne URL et les bons headers
+    ApiClient.instance
         .put(
-          Uri.parse('http://10.0.2.2:3000/cats/$catId'),
-          headers: {
-            'Content-Type': 'application/json',
-            if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode(updatedCat),
-        )
+      '/cats/$catId',
+      updatedCat,
+      headers: AuthService
+          .instance.authHeader, // Utilise le bon header avec l'accessToken
+    )
         .then((response) {
+      // ▲▲▲ FIN DE LA MODIFICATION ▲▲▲
       if (response.statusCode >= 200 && response.statusCode < 300) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Chat modifié avec succès !')),
@@ -147,14 +150,16 @@ class _EditCatPageState extends State<EditCatPage> {
         setState(() {
           _submitting = false;
         });
-        print('DEBUG: Après sauvegarde, _catData = [32m${_catData.toString()}[0m');
+        print(
+            'DEBUG: Après sauvegarde, _catData = [32m${_catData.toString()}[0m');
         if (mounted) {
           Future.delayed(const Duration(milliseconds: 500), () {
             Navigator.of(context).maybePop();
           });
         }
       } else {
-        final errorMsg = 'Erreur API PUT /cats/$catId: ${response.statusCode} - ${response.body}';
+        final errorMsg =
+            'Erreur API PUT /cats/$catId: ${response.statusCode} - ${response.body}';
         print(errorMsg);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erreur: ${response.body}\n$errorMsg')),
@@ -185,18 +190,22 @@ class _EditCatPageState extends State<EditCatPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text('Informations générales', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      const Text('Informations générales',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 18)),
                       const Divider(),
                       TextFormField(
                         controller: _nameController,
                         decoration: const InputDecoration(labelText: 'Nom'),
-                        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Requis' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _breedController,
                         decoration: const InputDecoration(labelText: 'Race'),
-                        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Requis' : null,
                       ),
                       const SizedBox(height: 12),
                       GestureDetector(
@@ -205,46 +214,56 @@ class _EditCatPageState extends State<EditCatPage> {
                           final picked = await showDatePicker(
                             context: context,
                             initialDate: _birthDateController.text.isNotEmpty
-                                ? DateTime.tryParse(_birthDateController.text) ?? DateTime.now()
+                                ? DateTime.tryParse(
+                                        _birthDateController.text) ??
+                                    DateTime.now()
                                 : DateTime.now(),
                             firstDate: DateTime(1990),
                             lastDate: DateTime.now(),
                           );
                           if (picked != null) {
-                            _birthDateController.text = picked.toIso8601String().substring(0, 10);
+                            _birthDateController.text =
+                                picked.toIso8601String().substring(0, 10);
                           }
                         },
                         child: AbsorbPointer(
                           child: TextFormField(
                             controller: _birthDateController,
-                            decoration: const InputDecoration(labelText: 'Date de naissance (YYYY-MM-DD)'),
-                            validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                            decoration: const InputDecoration(
+                                labelText: 'Date de naissance (YYYY-MM-DD)'),
+                            validator: (v) =>
+                                v == null || v.isEmpty ? 'Requis' : null,
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _weightController,
-                        decoration: const InputDecoration(labelText: 'Poids (kg)'),
+                        decoration:
+                            const InputDecoration(labelText: 'Poids (kg)'),
                         keyboardType: TextInputType.number,
-                        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Requis' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _colorController,
                         decoration: const InputDecoration(labelText: 'Couleur'),
-                        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Requis' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _genderController,
                         decoration: const InputDecoration(labelText: 'Sexe'),
-                        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Requis' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _healthNotesController,
-                        decoration: const InputDecoration(labelText: 'Notes de santé'),
+                        decoration:
+                            const InputDecoration(labelText: 'Notes de santé'),
                         maxLines: 2,
                       ),
                       const SizedBox(height: 24),
@@ -260,7 +279,10 @@ class _EditCatPageState extends State<EditCatPage> {
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_submitting || _catData == null || _catData?['id'] == null) ? null : _submit,
+              onPressed:
+                  (_submitting || _catData == null || _catData?['id'] == null)
+                      ? null
+                      : _submit,
               child: Text(_submitting ? 'Sauvegarde...' : 'Sauvegarder'),
             ),
           ),

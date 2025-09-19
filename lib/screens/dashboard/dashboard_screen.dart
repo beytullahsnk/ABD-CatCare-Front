@@ -1,7 +1,6 @@
-// lib/screens/dashboard/dashboard_screen.dart
+import 'package:abd_petcare/core/services/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import '../../core/services/api_provider.dart';
@@ -23,36 +22,23 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _fetchSensorAlerts(String catId) async {
-    final token = AuthState.instance.accessToken;
     try {
-      final response = await http.get(
-        Uri.parse('http://10.0.2.2:3000/sensors/alerts/$catId'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
+      // ▼▼▼ MODIFIÉ ICI ▼▼▼
+      // Utilise maintenant ApiClient pour garantir la bonne URL et les bons headers
+      final response = await ApiClient.instance.get(
+        '/sensors/alerts/$catId',
+        headers: AuthService.instance.authHeader,
       );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        
-        // fait en sorte que le jsondecode se fasse sur 
-        /* 
-        [
-          {
-            "id": "c1803ab7-9e8d-42d8-b0bf-85f6989230cb",
-            "createdAt": "2025-09-11T03:55:56.353Z",
-            "updatedAt": "2025-09-10T20:19:37.876Z",
-            "catId": "6e927a54-b1eb-41ec-9547-8f5f4e2777e9",
-            "type": "temperature_high",
-            "message": "Température élevée détectée",
-            "severity": "high",
-            "isResolved": false
-          }
-        ]
+      // ▲▲▲ FIN DE LA MODIFICATION ▲▲▲
 
-        afin de pouvoir faire un test
-        */
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
-        if (data is List) {
+        // Logique de parsing améliorée pour gérer les réponses enveloppées ou directes
+        if (data is Map && data['data'] is List) {
+          setState(() {
+            _sensorAlerts = List<Map<String, dynamic>>.from(data['data']);
+          });
+        } else if (data is List) {
           setState(() {
             _sensorAlerts = List<Map<String, dynamic>>.from(data);
           });
@@ -63,15 +49,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
         print('Sensor alerts: $_sensorAlerts');
       } else {
-        print('Erreur API /sensors/alerts/$catId: ${response.statusCode} - ${response.body}');
+        print(
+            'Erreur API /sensors/alerts/$catId: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       print('Erreur réseau /sensors/alerts/$catId: $e');
     }
   }
+
   List<Map<String, dynamic>> _sensorAlerts = [];
   Map<String, dynamic>? _sensorData;
   Map<String, dynamic>? _firstCat;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -112,6 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       print('Sensor data: $data');
     }
   }
+
   late Future<Map<String, dynamic>> _futureMetrics;
   final _api = ApiProvider.instance.get();
   int _currentIndex = 0;
@@ -124,7 +114,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadAlerts() async {
-  // plus d'usage de _alerts, fonction conservée pour compatibilité éventuelle
+    // plus d'usage de _alerts, fonction conservée pour compatibilité éventuelle
   }
 
   Future<void> _refresh() async {
@@ -170,8 +160,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
               debugPrint(
-                'Dashboard: notifications pressed -> settings_notifications',
-              );
+                  'Dashboard: notifications pressed -> settings_notifications');
               context.pushNamed('settings_notifications').then((_) {
                 if (!mounted) return;
                 setState(() => _currentIndex = 0);
@@ -238,8 +227,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fit: BoxFit.cover,
                           errorBuilder: (c, e, s) {
                             debugPrint(
-                              'Error loading asset default cat.png: $e',
-                            );
+                                'Error loading asset default cat.png: $e');
                             return Center(
                               child: Icon(
                                 Icons.pets,
@@ -270,8 +258,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       title: 'Dort',
                       subtitle: _firstCat != null &&
                               _firstCat!['activityThresholds'] != null &&
-                              _firstCat!['activityThresholds']['collar'] != null &&
-                              _firstCat!['activityThresholds']['collar']['inactivityHours'] != null
+                              _firstCat!['activityThresholds']['collar'] !=
+                                  null &&
+                              _firstCat!['activityThresholds']['collar']
+                                      ['inactivityHours'] !=
+                                  null
                           ? 'Dort depuis ${_firstCat!['activityThresholds']['collar']['inactivityHours']} heures'
                           : (lastSeen.isEmpty ? '—' : 'Il y a 1 heure'),
                       leadingIcon: Icons.bedtime,
@@ -284,8 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fit: BoxFit.cover,
                           errorBuilder: (c, e, s) {
                             debugPrint(
-                              'Error loading asset inactive_cat.png (thumb): $e',
-                            );
+                                'Error loading asset inactive_cat.png (thumb): $e');
                             return Container(
                               width: 112,
                               height: 64,
@@ -301,13 +291,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SectionHeader('Environnement'),
                     MetricTile(
-                      title: _sensorData != null && _sensorData!['temperature'] != null
+                      title: _sensorData != null &&
+                              _sensorData!['temperature'] != null
                           ? '${_sensorData!['temperature']}°C'
                           : (_firstCat != null &&
-                              _firstCat!['activityThresholds'] != null &&
-                              _firstCat!['activityThresholds']['environment'] != null &&
-                              _firstCat!['activityThresholds']['environment']['temperatureMin'] != null &&
-                              _firstCat!['activityThresholds']['environment']['temperatureMax'] != null
+                                  _firstCat!['activityThresholds'] != null &&
+                                  _firstCat!['activityThresholds']
+                                          ['environment'] !=
+                                      null &&
+                                  _firstCat!['activityThresholds']
+                                          ['environment']['temperatureMin'] !=
+                                      null &&
+                                  _firstCat!['activityThresholds']
+                                          ['environment']['temperatureMax'] !=
+                                      null
                               ? '${_firstCat!['activityThresholds']['environment']['temperatureMin']}°C / ${_firstCat!['activityThresholds']['environment']['temperatureMax']}°C'
                               : '${temperature.toStringAsFixed(0)}°C'),
                       subtitle: 'Température mesurée',
@@ -335,16 +332,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     MetricTile(
-                      title: _sensorData != null && _sensorData!['humidity'] != null
+                      title: _sensorData != null &&
+                              _sensorData!['humidity'] != null
                           ? '${_sensorData!['humidity']}%'
                           : (_firstCat != null &&
-                              _firstCat!['activityThresholds'] != null &&
-                              _firstCat!['activityThresholds']['environment'] != null &&
-                              _firstCat!['activityThresholds']['environment']['humidityMin'] != null &&
-                              _firstCat!['activityThresholds']['environment']['humidityMax'] != null
+                                  _firstCat!['activityThresholds'] != null &&
+                                  _firstCat!['activityThresholds']
+                                          ['environment'] !=
+                                      null &&
+                                  _firstCat!['activityThresholds']
+                                          ['environment']['humidityMin'] !=
+                                      null &&
+                                  _firstCat!['activityThresholds']
+                                          ['environment']['humidityMax'] !=
+                                      null
                               ? '${_firstCat!['activityThresholds']['environment']['humidityMin']}% / ${_firstCat!['activityThresholds']['environment']['humidityMax']}%'
                               : '$humidity%'),
-                      subtitle:'Humidité mesurée',
+                      subtitle: 'Humidité mesurée',
                       leadingIcon: Icons.water_drop,
                       trailingThumb: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -372,9 +376,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     MetricTile(
                       title: _firstCat != null &&
                               _firstCat!['activityThresholds'] != null &&
-                              _firstCat!['activityThresholds']['litter'] != null &&
-                              _firstCat!['activityThresholds']['litter']['humidityMin'] != null &&
-                              _firstCat!['activityThresholds']['litter']['humidityMax'] != null
+                              _firstCat!['activityThresholds']['litter'] !=
+                                  null &&
+                              _firstCat!['activityThresholds']['litter']
+                                      ['humidityMin'] !=
+                                  null &&
+                              _firstCat!['activityThresholds']['litter']
+                                      ['humidityMax'] !=
+                                  null
                           ? 'Humidité ${_firstCat!['activityThresholds']['litter']['humidityMin']}% / ${_firstCat!['activityThresholds']['litter']['humidityMax']}%'
                           : 'Humidité ${litterHumidity}%',
                       subtitle: litterHumidity > kLitterHumidityHigh

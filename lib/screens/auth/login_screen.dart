@@ -51,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     try {
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/auth/login'),
+        Uri.parse('/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': _email.text.trim(),
@@ -59,11 +59,12 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
       final cs = Theme.of(context).colorScheme;
-  if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
         if (data['state'] == true) {
           // Stocker les tokens, infos utilisateur et email envoyé
-          await AuthState.instance.signInWithApiResponse(data['data'], rawEmail: _email.text.trim());
+          await AuthState.instance.signInWithApiResponse(data['data'],
+              rawEmail: _email.text.trim());
           if (!mounted) return;
           context.go('/dashboard');
         } else {

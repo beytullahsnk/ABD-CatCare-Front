@@ -1,3 +1,4 @@
+import 'package:abd_petcare/core/services/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -53,21 +54,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _submitting = true);
     try {
-      final response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/auth/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final response = await ApiClient.instance.post(
+        '/auth/register',
+        {
           'email': _email.text.trim(),
-          'username': (_firstName.text.trim() + '.' + _lastName.text.trim()).replaceAll(' ', ''),
+          'username': (_firstName.text.trim() + '.' + _lastName.text.trim())
+              .replaceAll(' ', ''),
           'phoneNumber': _phone.text.trim(),
           'password': _password.text,
-        }),
+        },
       );
       final cs = Theme.of(context).colorScheme;
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
         if (data['state'] == true) {
-          await AuthState.instance.signInWithApiResponse(data['data'], rawEmail: _email.text.trim());
+          await AuthState.instance.signInWithApiResponse(data['data'],
+              rawEmail: _email.text.trim());
           if (!mounted) return;
           context.go('/dashboard');
         } else {

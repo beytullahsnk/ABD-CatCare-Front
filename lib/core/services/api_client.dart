@@ -5,8 +5,12 @@ class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
-  // Base URL de l'API Gateway (modifiable)
-  String baseUrl = 'http://10.0.2.2:3000';
+  String baseUrl = '/api';
+
+  void setBaseUrl(String url) {
+    baseUrl = url;
+  }
+
   Map<String, String> defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -40,9 +44,28 @@ class ApiClient {
     return http.delete(uri, headers: h);
   }
 
-  Future<bool> updateCatThresholds(String catId, Map<String, dynamic> thresholds, {Map<String, String>? headers}) async {
+  // --- MÉTHODES D'AUTHENTIFICATION AJOUTÉES ---
+
+  /// Tente de connecter un utilisateur avec son email et son mot de passe.
+  Future<http.Response> login(String email, String password) {
+    return post('/auth/login', {
+      'email': email,
+      'password': password,
+    });
+  }
+
+  /// Crée un nouveau compte utilisateur.
+  Future<http.Response> register(Map<String, dynamic> userData) {
+    return post('/auth/register', userData);
+  }
+
+  // --- MÉTHODE EXISTANTE ---
+  Future<bool> updateCatThresholds(
+      String catId, Map<String, dynamic> thresholds,
+      {Map<String, String>? headers}) async {
     print('Updating thresholds for cat $catId with data: $thresholds');
-    final resp = await put('/cats/$catId/thresholds', thresholds, headers: headers);
+    final resp =
+        await put('/cats/$catId/thresholds', thresholds, headers: headers);
     print('Response status: ${resp.body}');
     return resp.statusCode >= 200 && resp.statusCode < 300;
   }

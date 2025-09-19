@@ -7,13 +7,13 @@ import 'package:go_router/go_router.dart';
 
 import '../core/services/auth_state.dart';
 import '../screens/auth/login_screen.dart';
-import '../screens/auth/register_screen.dart';
+import '../screens/auth/register_stepper_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/notifications/notifications.dart';
 import '../screens/about/about_screen.dart';
 import '../screens/settings/litter_settings_page.dart';
 import '../screens/settings/environment_settings_page.dart';
-import '../screens/add_cat/add_cat_page.dart';
+import '../screens/add_cat/add_cat_stepper_page.dart';
 import '../screens/settings/activity_settings_page.dart';
 import '../screens/edit_cat/edit_cat_page.dart';
 
@@ -58,7 +58,7 @@ class AppRouter {
       GoRoute(
         path: '/register',
         name: 'register',
-        builder: (context, state) => const RegisterScreen(),
+        builder: (context, state) => const RegisterStepperScreen(),
       ),
       GoRoute(
         path: '/dashboard',
@@ -113,7 +113,7 @@ class AppRouter {
       GoRoute(
         path: '/add-cat',
         name: 'addCat',
-        builder: (context, state) => const AddCatPage(),
+        builder: (context, state) => const AddCatStepperPage(),
       ),
       GoRoute(
         path: '/edit-cat',

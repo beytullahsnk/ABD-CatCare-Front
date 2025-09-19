@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/services/auth_state.dart';
 import '../../models/user.dart';
 import '../../models/cat.dart';
+import '../../models/ruuvi_tag.dart';
 import '../../screens/widgets/primary_button.dart';
+import '../../screens/scan/qr_scanner_screen.dart';
+import '../../screens/scan/sensor_type_selection_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -26,6 +29,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _submitting = false;
   bool _obscure = true;
+  
+  // Nouveaux champs pour les RuuviTags
+  List<RuuviTag> _ruuviTags = [];
 
   @override
   void dispose() {
@@ -49,6 +55,56 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _pwd(String? v) =>
       (v == null || v.length < 8) ? '8 caractères minimum' : null;
 
+  Future<void> _scanRuuviTag() async {
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (context) => QRScannerScreen(
+          title: 'Scanner un RuuviTag',
+          onQRCodeScanned: (ruuviTagId) {
+            // Ne pas fermer l'écran de scan ici, on va naviguer vers la sélection
+            _navigateToTypeSelection(ruuviTagId);
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _navigateToTypeSelection(String ruuviTagId) async {
+    // Récupérer les types déjà utilisés
+    final usedTypes = _ruuviTags.map((tag) => tag.type).toList();
+    
+    final typeResult = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (context) => SensorTypeSelectionScreen(
+          ruuviTagId: ruuviTagId,
+          usedTypes: usedTypes, // Passer la liste des types utilisés
+          onTypeSelected: (id, type) {
+            Navigator.of(context).pop({
+              'ruuviTagId': id,
+              'type': type,
+            });
+          },
+        ),
+      ),
+    );
+    
+    if (typeResult != null) {
+      setState(() {
+        _ruuviTags.add(RuuviTag(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          ruuviTagId: typeResult['ruuviTagId'],
+          type: typeResult['type'],
+        ));
+      });
+    }
+  }
+
+  void _removeRuuviTag(int index) {
+    setState(() {
+      _ruuviTags.removeAt(index);
+    });
+  }
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _submitting = true);
@@ -61,6 +117,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'username': (_firstName.text.trim() + '.' + _lastName.text.trim()).replaceAll(' ', ''),
           'phoneNumber': _phone.text.trim(),
           'password': _password.text,
+          'ruuviTags': _ruuviTags.map((tag) => tag.toJson()).toList(),
         }),
       );
       final cs = Theme.of(context).colorScheme;
@@ -131,6 +188,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  Widget _buildRuuviTagCard(RuuviTag tag, int index) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(_getRuuviTagIcon(tag.type)),
+        title: Text(tag.ruuviTagId),
+        subtitle: Text(tag.type.displayName),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete, color: Colors.red),
+          onPressed: () => _removeRuuviTag(index),
+        ),
+      ),
+    );
+  }
+
+  IconData _getRuuviTagIcon(RuuviTagType type) {
+    switch (type) {
+      case RuuviTagType.collar:
+        return Icons.pets;
+      case RuuviTagType.environment:
+        return Icons.home;
+      case RuuviTagType.litter:
+        return Icons.cleaning_services;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -194,7 +277,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: const InputDecoration(labelText: 'Nom du chat'),
                   validator: _required,
                 ),
+                const SizedBox(height: 20),
+                
+                // Section RuuviTags
+                const Text(
+                  'RuuviTags',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Scannez les QR codes de vos capteurs RuuviTag',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
                 const SizedBox(height: 12),
+                
+                // Liste des RuuviTags scannés
+                if (_ruuviTags.isNotEmpty) ...[
+                  ...List.generate(_ruuviTags.length, (index) => 
+                    _buildRuuviTagCard(_ruuviTags[index], index)),
+                  const SizedBox(height: 12),
+                ],
+                
+                // Bouton pour scanner un nouveau RuuviTag
+                OutlinedButton.icon(
+                  onPressed: _scanRuuviTag,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('Scanner un RuuviTag'),
+                ),
+                const SizedBox(height: 12),
+                
                 Text('Photo du chat',
                     style: Theme.of(context).textTheme.labelLarge),
                 const SizedBox(height: 8),

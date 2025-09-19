@@ -1,9 +1,12 @@
 // lib/screens/dashboard/dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 import '../../core/services/api_provider.dart';
 import '../../core/services/auth_state.dart';
+import '../../core/services/auth_service.dart';
 import '../widgets/section_header.dart';
 import '../widgets/metric_tile.dart';
 import '../../core/constants/app_constants.dart';
@@ -19,9 +22,98 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  Future<void> _fetchSensorAlerts(String catId) async {
+    final token = AuthState.instance.accessToken;
+    try {
+      final response = await http.get(
+        Uri.parse('http://10.0.2.2:3000/sensors/alerts/$catId'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        
+        // fait en sorte que le jsondecode se fasse sur 
+        /* 
+        [
+          {
+            "id": "c1803ab7-9e8d-42d8-b0bf-85f6989230cb",
+            "createdAt": "2025-09-11T03:55:56.353Z",
+            "updatedAt": "2025-09-10T20:19:37.876Z",
+            "catId": "6e927a54-b1eb-41ec-9547-8f5f4e2777e9",
+            "type": "temperature_high",
+            "message": "Température élevée détectée",
+            "severity": "high",
+            "isResolved": false
+          }
+        ]
+
+        afin de pouvoir faire un test
+        */
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          setState(() {
+            _sensorAlerts = List<Map<String, dynamic>>.from(data);
+          });
+        } else {
+          setState(() {
+            _sensorAlerts = [];
+          });
+        }
+        print('Sensor alerts: $_sensorAlerts');
+      } else {
+        print('Erreur API /sensors/alerts/$catId: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('Erreur réseau /sensors/alerts/$catId: $e');
+    }
+  }
+  List<Map<String, dynamic>> _sensorAlerts = [];
+  Map<String, dynamic>? _sensorData;
+  Map<String, dynamic>? _firstCat;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _fetchAndLogFirstCat();
+  }
+
+  Future<void> _fetchAndLogFirstCat() async {
+    // Après avoir fetch le chat, fetch les alertes capteur
+    try {
+      final data = await AuthService.instance.fetchUserWithCats();
+      final cats = data?['extras']?['cats'] as List?;
+      if (cats != null && cats.isNotEmpty) {
+        setState(() {
+          _firstCat = Map<String, dynamic>.from(cats.first);
+        });
+        print('Premier chat: ${cats.first}');
+        await _fetchSensorData(_firstCat!['id']);
+      } else {
+        setState(() {
+          _firstCat = null;
+          _sensorData = null;
+        });
+        print('Aucun chat trouvé dans la réponse.');
+      }
+    } catch (e) {
+      print('Erreur fetchUserWithCats: $e');
+    }
+  }
+
+  Future<void> _fetchSensorData(String catId) async {
+    await _fetchSensorAlerts(catId);
+    final api = ApiProvider.instance.get();
+    final data = await api.fetchLatestSensorData(catId);
+    setState(() {
+      _sensorData = data;
+    });
+    if (data != null) {
+      print('Sensor data: $data');
+    }
+  }
   late Future<Map<String, dynamic>> _futureMetrics;
   final _api = ApiProvider.instance.get();
-  List<Map<String, dynamic>> _alerts = const [];
   int _currentIndex = 0;
 
   @override
@@ -32,21 +124,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadAlerts() async {
-    try {
-      final items = await _api.fetchAlerts();
-      if (!mounted) return;
-      setState(() => _alerts = items);
-    } catch (e) {
-      if (!mounted) return;
-      final cs = Theme.of(context).colorScheme;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: cs.error,
-          content: const Text('Impossible de charger les alertes'),
-        ),
-      );
-      setState(() => _alerts = const []);
-    }
+  // plus d'usage de _alerts, fonction conservée pour compatibilité éventuelle
   }
 
   Future<void> _refresh() async {
@@ -55,6 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
     await _futureMetrics;
     await _loadAlerts();
+    await _fetchAndLogFirstCat();
   }
 
   @override
@@ -140,7 +219,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final cs = theme.colorScheme;
                 return ListView(
                   children: [
-                    const SectionHeader('État général'),
+                    SectionHeader(_firstCat != null
+                        ? 'État général de ${_firstCat!['name'] ?? ''}'
+                        : 'État général'),
                     Container(
                       height: 180,
                       decoration: BoxDecoration(
@@ -187,7 +268,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SectionHeader('Dernière activité'),
                     MetricTile(
                       title: 'Dort',
-                      subtitle: lastSeen.isEmpty ? '—' : 'Il y a 1 heure',
+                      subtitle: _firstCat != null &&
+                              _firstCat!['activityThresholds'] != null &&
+                              _firstCat!['activityThresholds']['collar'] != null &&
+                              _firstCat!['activityThresholds']['collar']['inactivityHours'] != null
+                          ? 'Dort depuis ${_firstCat!['activityThresholds']['collar']['inactivityHours']} heures'
+                          : (lastSeen.isEmpty ? '—' : 'Il y a 1 heure'),
                       leadingIcon: Icons.bedtime,
                       trailingThumb: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -215,8 +301,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SectionHeader('Environnement'),
                     MetricTile(
-                      title: '${temperature.toStringAsFixed(0)}°C',
-                      subtitle: 'Température',
+                      title: _sensorData != null && _sensorData!['temperature'] != null
+                          ? '${_sensorData!['temperature']}°C'
+                          : (_firstCat != null &&
+                              _firstCat!['activityThresholds'] != null &&
+                              _firstCat!['activityThresholds']['environment'] != null &&
+                              _firstCat!['activityThresholds']['environment']['temperatureMin'] != null &&
+                              _firstCat!['activityThresholds']['environment']['temperatureMax'] != null
+                              ? '${_firstCat!['activityThresholds']['environment']['temperatureMin']}°C / ${_firstCat!['activityThresholds']['environment']['temperatureMax']}°C'
+                              : '${temperature.toStringAsFixed(0)}°C'),
+                      subtitle: 'Température mesurée',
                       leadingIcon: Icons.thermostat,
                       trailingThumb: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -241,8 +335,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     MetricTile(
-                      title: '$humidity%',
-                      subtitle: 'Humidité',
+                      title: _sensorData != null && _sensorData!['humidity'] != null
+                          ? '${_sensorData!['humidity']}%'
+                          : (_firstCat != null &&
+                              _firstCat!['activityThresholds'] != null &&
+                              _firstCat!['activityThresholds']['environment'] != null &&
+                              _firstCat!['activityThresholds']['environment']['humidityMin'] != null &&
+                              _firstCat!['activityThresholds']['environment']['humidityMax'] != null
+                              ? '${_firstCat!['activityThresholds']['environment']['humidityMin']}% / ${_firstCat!['activityThresholds']['environment']['humidityMax']}%'
+                              : '$humidity%'),
+                      subtitle:'Humidité mesurée',
                       leadingIcon: Icons.water_drop,
                       trailingThumb: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -268,10 +370,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SectionHeader('Bac à litière'),
                     MetricTile(
-                      title: litterHumidity > kLitterHumidityHigh
+                      title: _firstCat != null &&
+                              _firstCat!['activityThresholds'] != null &&
+                              _firstCat!['activityThresholds']['litter'] != null &&
+                              _firstCat!['activityThresholds']['litter']['humidityMin'] != null &&
+                              _firstCat!['activityThresholds']['litter']['humidityMax'] != null
+                          ? 'Humidité ${_firstCat!['activityThresholds']['litter']['humidityMin']}% / ${_firstCat!['activityThresholds']['litter']['humidityMax']}%'
+                          : 'Humidité ${litterHumidity}%',
+                      subtitle: litterHumidity > kLitterHumidityHigh
                           ? 'Humide'
                           : 'Propre',
-                      subtitle: 'Humidité ${litterHumidity}%',
                       leadingIcon: Icons.inventory_2,
                       trailingThumb: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -296,18 +404,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     const SectionHeader('Alertes'),
-                    if (_alerts.isEmpty)
+                    if (_sensorAlerts.isEmpty)
                       MetricTile(
                         title: 'Aucune alerte',
                         subtitle: 'Tout est normal',
                         leadingIcon: Icons.info_outline,
                       )
                     else
-                      ..._alerts.map(
+                      ..._sensorAlerts.map(
                         (a) => MetricTile(
-                          title: '${a['type']}',
-                          subtitle: '${a['message']}',
-                          leadingIcon: a['level'] == 'warning'
+                          title: a['type'] ?? 'Alerte',
+                          subtitle: a['message'] ?? '',
+                          leadingIcon: (a['severity'] == 'high')
                               ? Icons.warning_amber_rounded
                               : Icons.info_outline,
                         ),
@@ -328,14 +436,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
 
-      // Barre de navigation visible **uniquement** sur le Dashboard
+      // Barre de navigation + bouton flottant centré
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
+          if (index == 2) {
+            // Bouton dynamique : ajouter ou éditer un chat
+            if (_firstCat == null) {
+              context.pushNamed('addCat');
+            } else {
+              context.pushNamed('editCat');
+            }
+            return;
+          }
           setState(() => _currentIndex = index);
           switch (index) {
             case 0:
-              // déjà sur le dashboard
               break;
             case 1:
               context.pushNamed('litter').then((_) {
@@ -343,14 +459,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 setState(() => _currentIndex = 0);
               });
               break;
-            case 2:
-              // open environment overview via named route
+            case 3:
               context.pushNamed('environment').then((_) {
                 if (!mounted) return;
                 setState(() => _currentIndex = 0);
               });
               break;
-            case 3:
+            case 4:
               context.pushNamed('activity').then((_) {
                 if (!mounted) return;
                 setState(() => _currentIndex = 0);
@@ -359,26 +474,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
         },
         type: BottomNavigationBarType.fixed,
-        // show labels for clarity
         showSelectedLabels: true,
         showUnselectedLabels: true,
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             label: 'Accueil',
           ),
-          BottomNavigationBarItem(
-            // Litière: utiliser une icône de bac/boîte
+          const BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2),
             label: 'Bac à litière',
           ),
           BottomNavigationBarItem(
-            // Environnement: température/thermostat
+            icon: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                _firstCat == null ? Icons.add : Icons.edit,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+            label: _firstCat == null ? 'Ajouter un chat' : 'Mon Chat',
+          ),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.thermostat_outlined),
             label: 'Environnement',
           ),
-          BottomNavigationBarItem(
-            // Activité: chat/patte (pets)
+          const BottomNavigationBarItem(
             icon: Icon(Icons.pets),
             label: 'Activité',
           ),

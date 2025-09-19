@@ -1,10 +1,50 @@
-import 'dart:convert';
 
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../models/notification_prefs.dart';
-import '../../models/user.dart';
+
+// Minimal User class definition for mock purposes
+class User {
+  final String email;
+  User({required this.email});
+}
+
+class NotificationPrefs {
+  final bool enablePush;
+  final bool enableEmail;
+
+  NotificationPrefs({
+    required this.enablePush,
+    required this.enableEmail,
+  });
+
+  factory NotificationPrefs.fromJson(Map<String, dynamic> json) {
+    return NotificationPrefs(
+      enablePush: json['enablePush'] as bool? ?? true,
+      enableEmail: json['enableEmail'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'enablePush': enablePush,
+        'enableEmail': enableEmail,
+      };
+}
 
 class MockApiService {
+  /// Mock version of fetchLatestSensorData for compatibility with RealApiService
+  Future<Map<String, dynamic>?> fetchLatestSensorData(String catId) async {
+    // Simulate network delay
+    await Future.delayed(const Duration(milliseconds: 300));
+    // Return mock data similar to fetchDashboardData
+    return <String, dynamic>{
+      'temperature': 22.5,
+      'humidity': 55,
+      'litterHumidity': 28,
+      'lastSeen': DateTime.now().toIso8601String(),
+    };
+  }
+  // For compatibility with RealApiService
+  String get defaultCatId => 'mock-cat-id';
   static const String notificationPrefsKey = 'notification_prefs';
 
   Future<bool> login(String email, String password) async {

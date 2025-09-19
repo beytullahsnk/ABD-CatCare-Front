@@ -6,7 +6,7 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
 
   // Base URL de l'API Gateway (modifiable)
-  String baseUrl = 'http://localhost:3000/api';
+  String baseUrl = 'http://10.0.2.2:3000';
   Map<String, String> defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -38,5 +38,12 @@ class ApiClient {
     final uri = Uri.parse('$baseUrl$path');
     final h = {...defaultHeaders, if (headers != null) ...headers};
     return http.delete(uri, headers: h);
+  }
+
+  Future<bool> updateCatThresholds(String catId, Map<String, dynamic> thresholds, {Map<String, String>? headers}) async {
+    print('Updating thresholds for cat $catId with data: $thresholds');
+    final resp = await put('/cats/$catId/thresholds', thresholds, headers: headers);
+    print('Response status: ${resp.body}');
+    return resp.statusCode >= 200 && resp.statusCode < 300;
   }
 }

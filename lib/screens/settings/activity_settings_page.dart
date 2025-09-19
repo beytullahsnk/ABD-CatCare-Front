@@ -1,5 +1,7 @@
+import 'package:abd_petcare/core/services/api_client.dart';
+
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:abd_petcare/core/services/auth_service.dart';
 
 // Activity settings page: two sections (Activité, Inactivité). No cooldown.
 class ActivitySettingsPage extends StatefulWidget {
@@ -9,89 +11,92 @@ class ActivitySettingsPage extends StatefulWidget {
   State<ActivitySettingsPage> createState() => _ActivitySettingsPageState();
 }
 
+
+// Activity settings page: two sections (Activité, Inactivité). No cooldown.
+
 class _ActivitySettingsPageState extends State<ActivitySettingsPage> {
-  static const String _kTriggerCount = 'act_trigger_count';
-  static const String _kWindowMin = 'act_window_min';
-  static const String _kWindowInactivityMin = 'act_window_inactivity_min';
-  static const String _kInactivityMin = 'act_inactivity_min';
-  static const String _kAlertNoActivityMin = 'act_alert_no_activity_min';
-  static const String _kNotif = 'act_notifications';
 
-  int triggerCount = 3;
-  int windowMinutes = 15;
-  int windowInactivityMinutes = 60;
-  int inactivityMin = 60;
-  int alertNoActivityMin = 240;
-  bool notifications = true;
-
+  String? _catId;
+  Map<String, dynamic>? _catThresholds;
+  double movementThreshold = 0;
+  double lowActivityThreshold = 0;
+  double highActivityThreshold = 0;
+  int inactivityHours = 0;
   bool _loading = true;
+
+  Future<void> _updateCollarThresholds({
+    int? newInactivityHours,
+    double? newMovementThreshold,
+    double? newLowActivityThreshold,
+    double? newHighActivityThreshold,
+  }) async {
+    if (_catId == null || _catThresholds == null) return;
+    final collar = Map<String, dynamic>.from(_catThresholds!['collar'] ?? {});
+    final environment = Map<String, dynamic>.from(_catThresholds!['environment'] ?? {});
+    final litter = Map<String, dynamic>.from(_catThresholds!['litter'] ?? {});
+    if (newInactivityHours != null) collar['inactivityHours'] = newInactivityHours;
+    if (newMovementThreshold != null) collar['movementThreshold'] = newMovementThreshold;
+    if (newLowActivityThreshold != null) collar['lowActivityThreshold'] = newLowActivityThreshold;
+    if (newHighActivityThreshold != null) collar['highActivityThreshold'] = newHighActivityThreshold;
+    if (litter['dailyUsageMin'] == null) litter['dailyUsageMin'] = 1;
+    final body = {
+      'collar': collar,
+      'environment': environment,
+      'litter': litter,
+    };
+    await ApiClient.instance.updateCatThresholds(_catId!, body, headers: AuthService.instance.authHeader);
+    setState(() {
+      _catThresholds = {
+        'collar': collar,
+        'environment': environment,
+        'litter': litter,
+      };
+      if (newInactivityHours != null) inactivityHours = newInactivityHours;
+      if (newMovementThreshold != null) movementThreshold = newMovementThreshold;
+      if (newLowActivityThreshold != null) lowActivityThreshold = newLowActivityThreshold;
+      if (newHighActivityThreshold != null) highActivityThreshold = newHighActivityThreshold;
+    });
+  }
+
+  void incInactivity() => _updateCollarThresholds(newInactivityHours: inactivityHours + 1);
+  void decInactivity() => _updateCollarThresholds(newInactivityHours: (inactivityHours - 1).clamp(0, 999));
+  void incMovement() => _updateCollarThresholds(newMovementThreshold: double.parse((movementThreshold + 0.01).toStringAsFixed(2)));
+  void decMovement() => _updateCollarThresholds(newMovementThreshold: double.parse((movementThreshold - 0.01).clamp(0, 999).toStringAsFixed(2)));
+  void incLowActivity() => _updateCollarThresholds(newLowActivityThreshold: double.parse((lowActivityThreshold + 0.01).toStringAsFixed(2)));
+  void decLowActivity() => _updateCollarThresholds(newLowActivityThreshold: double.parse((lowActivityThreshold - 0.01).clamp(0, 999).toStringAsFixed(2)));
+  void incHighActivity() => _updateCollarThresholds(newHighActivityThreshold: double.parse((highActivityThreshold + 0.01).toStringAsFixed(2)));
+  void decHighActivity() => _updateCollarThresholds(newHighActivityThreshold: double.parse((highActivityThreshold - 0.01).clamp(0, 999).toStringAsFixed(2)));
 
   @override
   void initState() {
     super.initState();
-    _loadPrefs();
+    _fetchCollarThresholds();
   }
 
-  Future<void> _loadPrefs() async {
-    final sp = await SharedPreferences.getInstance();
-    setState(() {
-      triggerCount = sp.getInt(_kTriggerCount) ?? triggerCount;
-      windowMinutes = sp.getInt(_kWindowMin) ?? windowMinutes;
-      windowInactivityMinutes =
-          sp.getInt(_kWindowInactivityMin) ?? windowInactivityMinutes;
-      inactivityMin = sp.getInt(_kInactivityMin) ?? inactivityMin;
-      alertNoActivityMin =
-          sp.getInt(_kAlertNoActivityMin) ?? alertNoActivityMin;
-      notifications = sp.getBool(_kNotif) ?? notifications;
-      _loading = false;
-    });
-  }
-
-  Future<void> _savePrefs() async {
-    final sp = await SharedPreferences.getInstance();
-    await sp.setInt(_kTriggerCount, triggerCount);
-    await sp.setInt(_kWindowMin, windowMinutes);
-    await sp.setInt(_kWindowInactivityMin, windowInactivityMinutes);
-    await sp.setInt(_kInactivityMin, inactivityMin);
-    await sp.setInt(_kAlertNoActivityMin, alertNoActivityMin);
-    await sp.setBool(_kNotif, notifications);
-    if (!mounted) return;
-    final cs = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Paramètres Activité enregistrés'),
-        backgroundColor: cs.secondary,
-      ),
-    );
-  }
-
-  void incTrigger() => setState(() => triggerCount = triggerCount + 1);
-  void decTrigger() =>
-      setState(() => triggerCount = (triggerCount - 1).clamp(0, 999));
-
-  void incWindow() =>
-      setState(() => windowMinutes = (windowMinutes + 5).clamp(1, 1440));
-  void decWindow() =>
-      setState(() => windowMinutes = (windowMinutes - 5).clamp(1, 1440));
-
-  void incWindowInactivity() => setState(() =>
-      windowInactivityMinutes = (windowInactivityMinutes + 5).clamp(1, 1440));
-  void decWindowInactivity() => setState(() =>
-      windowInactivityMinutes = (windowInactivityMinutes - 5).clamp(1, 1440));
-
-  void incInactivity() =>
-      setState(() => inactivityMin = (inactivityMin + 15).clamp(1, 10080));
-  void decInactivity() =>
-      setState(() => inactivityMin = (inactivityMin - 15).clamp(1, 10080));
-
-  void incAlertNoActivity() => setState(
-      () => alertNoActivityMin = (alertNoActivityMin + 60).clamp(0, 10080));
-  void decAlertNoActivity() => setState(
-      () => alertNoActivityMin = (alertNoActivityMin - 60).clamp(0, 10080));
-
-  String _formatMin(int m) {
-    if (m >= 60 && m % 60 == 0) return '${m ~/ 60}h';
-    return '${m}m';
+  Future<void> _fetchCollarThresholds() async {
+    setState(() => _loading = true);
+    try {
+      final userResp = await AuthService.instance.fetchUserWithCats();
+      final cats = userResp?['extras']?['cats'] as List?;
+      if (cats == null || cats.isEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
+      final firstCat = cats.first;
+      final thresholds = firstCat['activityThresholds'] as Map<String, dynamic>?;
+      final collar = thresholds?['collar'] ?? {};
+      setState(() {
+        _catId = firstCat['id'] as String?;
+        _catThresholds = thresholds;
+        inactivityHours = collar['inactivityHours'] ?? 0;
+        movementThreshold = (collar['movementThreshold'] ?? 0).toDouble();
+        lowActivityThreshold = (collar['lowActivityThreshold'] ?? 0).toDouble();
+        highActivityThreshold = (collar['highActivityThreshold'] ?? 0).toDouble();
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
@@ -110,113 +115,102 @@ class _ActivitySettingsPageState extends State<ActivitySettingsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Activité section
-            Text('Activité', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 8),
-            _SettingCard(
-              icon: Icons.pets,
-              title: 'Déclenchement',
-              child: Row(children: [
-                _SmallButton(icon: Icons.remove, onTap: decTrigger),
-                const SizedBox(width: 8),
-                Container(
-                  width: 120,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('$triggerCount'),
-                ),
-                const SizedBox(width: 8),
-                _SmallButton(icon: Icons.add, onTap: incTrigger),
-              ]),
-            ),
-            const SizedBox(height: 8),
-            _SettingCard(
-              icon: Icons.schedule,
-              title: 'Fenêtre (activité)',
-              child: Row(children: [
-                _SmallButton(icon: Icons.remove, onTap: decWindow),
-                const SizedBox(width: 8),
-                Container(
-                  width: 120,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('$windowMinutes min'),
-                ),
-                const SizedBox(width: 8),
-                _SmallButton(icon: Icons.add, onTap: incWindow),
-              ]),
-            ),
-            const SizedBox(height: 16),
-
-            // Inactivité section
-            Text('Inactivité', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 8),
-            _SettingCard(
-              icon: Icons.schedule_outlined,
-              title: 'Fenêtre (inactivité)',
-              child: Row(children: [
-                _SmallButton(icon: Icons.remove, onTap: decWindowInactivity),
-                const SizedBox(width: 8),
-                Container(
-                  width: 120,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('$windowInactivityMinutes min'),
-                ),
-                const SizedBox(width: 8),
-                _SmallButton(icon: Icons.add, onTap: incWindowInactivity),
-              ]),
-            ),
+            Text('Collier', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             _SettingCard(
               icon: Icons.timer,
-              title: 'Durée minimale d\'inactivité',
-              child: Row(children: [
-                _SmallButton(icon: Icons.remove, onTap: decInactivity),
-                const SizedBox(width: 8),
-                Container(
-                  width: 120,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
+              title: 'Heures d\'inactivité',
+              child: Row(
+                children: [
+                  _SmallButton(icon: Icons.remove, onTap: decInactivity),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 60,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('$inactivityHours h'),
                   ),
-                  child: Text(_formatMin(inactivityMin)),
-                ),
-                const SizedBox(width: 8),
-                _SmallButton(icon: Icons.add, onTap: incInactivity),
-              ]),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                const Icon(Icons.notifications_none),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Notifications push')),
-                Switch(
-                    value: notifications,
-                    onChanged: (v) => setState(() => notifications = v)),
-              ],
-            ),
-            ElevatedButton(
-              onPressed: _savePrefs,
-              child: const SizedBox(
-                width: double.infinity,
-                child: Center(child: Text('Enregistrer')),
+                  const SizedBox(width: 8),
+                  _SmallButton(icon: Icons.add, onTap: incInactivity),
+                ],
               ),
             ),
+            const SizedBox(height: 8),
+            _SettingCard(
+              icon: Icons.directions_run,
+              title: 'Seuil de mouvement',
+              child: Row(
+                children: [
+                  _SmallButton(icon: Icons.remove, onTap: decMovement),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 60,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(movementThreshold.toString()),
+                  ),
+                  const SizedBox(width: 8),
+                  _SmallButton(icon: Icons.add, onTap: incMovement),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            _SettingCard(
+              icon: Icons.trending_down,
+              title: 'Seuil activité basse',
+              child: Row(
+                children: [
+                  _SmallButton(icon: Icons.remove, onTap: decLowActivity),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 60,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(lowActivityThreshold.toString()),
+                  ),
+                  const SizedBox(width: 8),
+                  _SmallButton(icon: Icons.add, onTap: incLowActivity),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            _SettingCard(
+              icon: Icons.trending_up,
+              title: 'Seuil activité haute',
+              child: Row(
+                children: [
+                  _SmallButton(icon: Icons.remove, onTap: decHighActivity),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 60,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(highActivityThreshold.toString()),
+                  ),
+                  const SizedBox(width: 8),
+                  _SmallButton(icon: Icons.add, onTap: incHighActivity),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            // Plus de bouton enregistrer, tout est affiché depuis l'API
           ],
         ),
       ),

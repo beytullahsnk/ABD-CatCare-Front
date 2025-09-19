@@ -1,8 +1,31 @@
+
 import 'dart:convert';
 import 'package:abd_petcare/core/services/auth_service.dart';
 import 'package:abd_petcare/models/notification_prefs.dart';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
+
+  /// Fetches the latest sensor data for a given catId from the backend.
+  /// Returns the decoded data map or null on error.
+  Future<Map<String, dynamic>?> fetchLatestSensorData(String catId) async {
+    try {
+      final resp = await ApiClient.instance.get(
+        '/sensors/latest/$catId',
+        headers: AuthService.instance.authHeader,
+      );
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        final data = jsonDecode(resp.body);
+        if (data is Map && data['data'] is Map<String, dynamic>) {
+          return data['data'] as Map<String, dynamic>;
+        }
+      } else {
+        print('Erreur API /sensors/latest/$catId: ${resp.statusCode} - ${resp.body}');
+      }
+    } catch (e) {
+      print('Erreur réseau /sensors/latest/$catId: $e');
+    }
+    return null;
+  }
 
 class RealApiService {
   RealApiService._();

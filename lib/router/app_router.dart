@@ -13,7 +13,9 @@ import '../screens/notifications/notifications.dart';
 import '../screens/about/about_screen.dart';
 import '../screens/settings/litter_settings_page.dart';
 import '../screens/settings/environment_settings_page.dart';
+import '../screens/add_cat/add_cat_page.dart';
 import '../screens/settings/activity_settings_page.dart';
+import '../screens/edit_cat/edit_cat_page.dart';
 
 class AppRouter {
   AppRouter._();
@@ -47,7 +49,7 @@ class AppRouter {
       }
       return null;
     },
-    routes: <RouteBase>[
+  routes: <RouteBase>[
       GoRoute(
         path: '/login',
         name: 'login',
@@ -107,6 +109,16 @@ class AppRouter {
         path: '/profile',
         name: 'profile',
         builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: '/add-cat',
+        name: 'addCat',
+        builder: (context, state) => const AddCatPage(),
+      ),
+      GoRoute(
+        path: '/edit-cat',
+        name: 'editCat',
+        builder: (context, state) => const EditCatPage(),
       ),
     ],
   );

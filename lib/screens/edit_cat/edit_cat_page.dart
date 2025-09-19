@@ -127,12 +127,12 @@ class _EditCatPageState extends State<EditCatPage> {
       "status": _statusController.text.trim(),
     };
     // print updatedCat
-    print('DEBUG: updatedCat = [32m${updatedCat.toString()}[0m');
+    print('DEBUG: updatedCat =  [32m${updatedCat.toString()} [0m');
     final catId = _catData?['id'];
     final token = AuthState.instance.refreshToken;
     http
         .put(
-          Uri.parse('http://10.0.2.2:3000/cats/$catId'),
+          Uri.parse('http://localhost:3000/cats/$catId'),
           headers: {
             'Content-Type': 'application/json',
             if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
@@ -147,7 +147,7 @@ class _EditCatPageState extends State<EditCatPage> {
         setState(() {
           _submitting = false;
         });
-        print('DEBUG: Après sauvegarde, _catData = [32m${_catData.toString()}[0m');
+        print('DEBUG: Après sauvegarde, _catData =  [32m${_catData.toString()} [0m');
         if (mounted) {
           Future.delayed(const Duration(milliseconds: 500), () {
             Navigator.of(context).maybePop();

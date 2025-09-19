@@ -6,7 +6,7 @@ class ApiProvider {
   static final ApiProvider instance = ApiProvider._();
 
   /// Switch here for development: true => use mock, false => use real
-  bool useMock = true;
+  bool useMock = false;
 
   dynamic get() {
     if (useMock) return MockApiService();

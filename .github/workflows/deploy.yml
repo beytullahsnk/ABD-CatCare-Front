@@ -1,0 +1,40 @@
+name: Deploy Frontend to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy Flutter Web App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        run: flutter build web
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+          #   port: ${{ secrets.SERVER_PORT }}
+
+          script: |
+            # rsync est une méthode efficace pour synchroniser les fichiers.
+            # Il ne transfère que les fichiers modifiés, ce qui est très rapide.
+            # L'option --delete supprime les anciens fichiers sur le serveur qui ne sont plus dans le build.
+            rsync -avz --delete ./build/web/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/ABD-CatCare-Front/

@@ -1,38 +1,35 @@
 import 'dart:convert';
 import 'package:abd_petcare/core/services/auth_service.dart';
-import 'package:abd_petcare/core/services/auth_state.dart'; 
+import 'package:abd_petcare/core/services/auth_state.dart';
 import 'package:abd_petcare/models/notification_prefs.dart';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
 
-  /// Fetches the latest sensor data for a given catId from the backend.
-  /// Returns the decoded data map or null on error.
-  Future<Map<String, dynamic>?> fetchLatestSensorData(String catId) async {
-    try {
-      final resp = await ApiClient.instance.get(
-        '/sensors/latest/$catId',
-        headers: AuthService.instance.authHeader,
-      );
-      if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        final data = jsonDecode(resp.body);
-        if (data is Map && data['data'] is Map<String, dynamic>) {
-          return data['data'] as Map<String, dynamic>;
-        }
-      } else {
-        print('Erreur API /sensors/latest/$catId: ${resp.statusCode} - ${resp.body}');
+Future<Map<String, dynamic>?> fetchLatestSensorData(String catId) async {
+  try {
+    final resp = await ApiClient.instance.get(
+      '/sensors/latest/$catId',
+      headers: AuthService.instance.authHeader,
+    );
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      final data = jsonDecode(resp.body);
+      if (data is Map && data['data'] is Map<String, dynamic>) {
+        return data['data'] as Map<String, dynamic>;
       }
-    } catch (e) {
-      print('Erreur réseau /sensors/latest/$catId: $e');
+    } else {
+      print('Erreur API /sensors/latest/$catId: ${resp.statusCode} - ${resp.body}');
     }
-    return null;
+  } catch (e) {
+    print('Erreur réseau /sensors/latest/$catId: $e');
   }
+  return null;
+}
 
 class RealApiService {
   RealApiService._();
   static final RealApiService instance = RealApiService._();
 
-  // Récupérer le chat de l'utilisateur connecté
-  Future<String?> getUserCatId() async { // Rendre publique
+  Future<String?> getUserCatId() async {
     try {
       final token = AuthState.instance.accessToken;
       if (token == null || token.isEmpty) {
@@ -53,13 +50,11 @@ class RealApiService {
         if (data['state'] == true && data['extras'] != null) {
           final cats = data['extras']['cats'] as List<dynamic>?;
           if (cats != null && cats.isNotEmpty) {
-            return cats[0]['id'] as String; // Premier chat de l'utilisateur
+            return cats[0]['id'] as String;
           }
         }
       } else if (resp.statusCode == 401) {
         print('Token expiré, déconnexion nécessaire');
-        // Optionnel: déclencher une déconnexion automatique
-        // AuthState.instance.signOut();
       }
     } catch (e) {
       print('Erreur lors de la récupération du chat utilisateur: $e');
@@ -77,7 +72,7 @@ class RealApiService {
           'temperature': 0.0,
           'humidity': 0,
           'litterHumidity': 0,
-          'lastSeen': DateTime.now().toIso8601String(),
+          'lastSeen': '', // Chaîne vide au lieu de DateTime.now()
         };
       }
 
@@ -87,7 +82,7 @@ class RealApiService {
           'temperature': 0.0,
           'humidity': 0,
           'litterHumidity': 0,
-          'lastSeen': DateTime.now().toIso8601String(),
+          'lastSeen': '', // Chaîne vide au lieu de DateTime.now()
         };
       }
 
@@ -153,7 +148,7 @@ class RealApiService {
       'temperature': 0.0,
       'humidity': 0,
       'litterHumidity': 0,
-      'lastSeen': DateTime.now().toIso8601String(),
+      'lastSeen': '', // Chaîne vide au lieu de DateTime.now()
     };
   }
 

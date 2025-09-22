@@ -11,9 +11,6 @@ import '../widgets/section_header.dart';
 import '../widgets/metric_tile.dart';
 import '../../core/constants/app_constants.dart';
 
-/// Ecran tableau de bord
-/// - Récupère les métriques via RealApiService
-/// - Affiche 4 cartes (Température, Humidité, Activité, Litière) avec icône et couleur
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -273,7 +270,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               _firstCat!['activityThresholds']['collar'] != null &&
                               _firstCat!['activityThresholds']['collar']['inactivityHours'] != null
                           ? 'Dort depuis ${_firstCat!['activityThresholds']['collar']['inactivityHours']} heures'
-                          : (lastSeen.isEmpty ? '—' : 'Il y a 1 heure'),
+                          : 'Aucune donnée d\'activité disponible',
                       leadingIcon: Icons.bedtime,
                       trailingThumb: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -291,7 +288,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               height: 64,
                               color: cs.primaryContainer,
                               child: Icon(
-                                Icons.bedtime,
+                                Icons.pets,
                                 color: cs.onPrimaryContainer,
                               ),
                             );
@@ -441,12 +438,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         currentIndex: _currentIndex,
         onTap: (index) {
           if (index == 2) {
-            // Bouton dynamique : ajouter ou éditer un chat
-            if (_firstCat == null) {
-              context.pushNamed('addCat');
-            } else {
-              context.pushNamed('editCat');
-            }
+            // Bouton actualiser : recharger les données
+            _refresh();
             return;
           }
           setState(() => _currentIndex = index);
@@ -492,13 +485,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 shape: BoxShape.circle,
               ),
               padding: const EdgeInsets.all(8),
-              child: Icon(
-                _firstCat == null ? Icons.add : Icons.edit,
+              child: const Icon(
+                Icons.refresh,
                 color: Colors.white,
                 size: 32,
               ),
             ),
-            label: _firstCat == null ? 'Ajouter un chat' : 'Mon Chat',
+            label: 'Actualiser',
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.thermostat_outlined),

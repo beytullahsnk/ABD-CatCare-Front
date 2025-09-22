@@ -1,4 +1,3 @@
-// lib/screens/profile/profile_page.dart
 import 'package:abd_petcare/core/services/auth_state.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

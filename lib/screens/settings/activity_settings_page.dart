@@ -1,9 +1,9 @@
-import 'package:abd_petcare/core/services/api_client.dart';
-
 import 'package:flutter/material.dart';
-import 'package:abd_petcare/core/services/auth_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../core/services/auth_state.dart';
+import '../../models/ruuvi_tag.dart';
 
-// Activity settings page: two sections (Activité, Inactivité). No cooldown.
 class ActivitySettingsPage extends StatefulWidget {
   const ActivitySettingsPage({super.key});
 
@@ -11,92 +11,168 @@ class ActivitySettingsPage extends StatefulWidget {
   State<ActivitySettingsPage> createState() => _ActivitySettingsPageState();
 }
 
-
-// Activity settings page: two sections (Activité, Inactivité). No cooldown.
-
 class _ActivitySettingsPageState extends State<ActivitySettingsPage> {
-
   String? _catId;
-  Map<String, dynamic>? _catThresholds;
-  double movementThreshold = 0;
-  double lowActivityThreshold = 0;
-  double highActivityThreshold = 0;
+  String? _ruuviTagId;
   int inactivityHours = 0;
   bool _loading = true;
-
-  Future<void> _updateCollarThresholds({
-    int? newInactivityHours,
-    double? newMovementThreshold,
-    double? newLowActivityThreshold,
-    double? newHighActivityThreshold,
-  }) async {
-    if (_catId == null || _catThresholds == null) return;
-    final collar = Map<String, dynamic>.from(_catThresholds!['collar'] ?? {});
-    final environment = Map<String, dynamic>.from(_catThresholds!['environment'] ?? {});
-    final litter = Map<String, dynamic>.from(_catThresholds!['litter'] ?? {});
-    if (newInactivityHours != null) collar['inactivityHours'] = newInactivityHours;
-    if (newMovementThreshold != null) collar['movementThreshold'] = newMovementThreshold;
-    if (newLowActivityThreshold != null) collar['lowActivityThreshold'] = newLowActivityThreshold;
-    if (newHighActivityThreshold != null) collar['highActivityThreshold'] = newHighActivityThreshold;
-    if (litter['dailyUsageMin'] == null) litter['dailyUsageMin'] = 1;
-    final body = {
-      'collar': collar,
-      'environment': environment,
-      'litter': litter,
-    };
-    await ApiClient.instance.updateCatThresholds(_catId!, body, headers: AuthService.instance.authHeader);
-    setState(() {
-      _catThresholds = {
-        'collar': collar,
-        'environment': environment,
-        'litter': litter,
-      };
-      if (newInactivityHours != null) inactivityHours = newInactivityHours;
-      if (newMovementThreshold != null) movementThreshold = newMovementThreshold;
-      if (newLowActivityThreshold != null) lowActivityThreshold = newLowActivityThreshold;
-      if (newHighActivityThreshold != null) highActivityThreshold = newHighActivityThreshold;
-    });
-  }
-
-  void incInactivity() => _updateCollarThresholds(newInactivityHours: inactivityHours + 1);
-  void decInactivity() => _updateCollarThresholds(newInactivityHours: (inactivityHours - 1).clamp(0, 999));
-  void incMovement() => _updateCollarThresholds(newMovementThreshold: double.parse((movementThreshold + 0.01).toStringAsFixed(2)));
-  void decMovement() => _updateCollarThresholds(newMovementThreshold: double.parse((movementThreshold - 0.01).clamp(0, 999).toStringAsFixed(2)));
-  void incLowActivity() => _updateCollarThresholds(newLowActivityThreshold: double.parse((lowActivityThreshold + 0.01).toStringAsFixed(2)));
-  void decLowActivity() => _updateCollarThresholds(newLowActivityThreshold: double.parse((lowActivityThreshold - 0.01).clamp(0, 999).toStringAsFixed(2)));
-  void incHighActivity() => _updateCollarThresholds(newHighActivityThreshold: double.parse((highActivityThreshold + 0.01).toStringAsFixed(2)));
-  void decHighActivity() => _updateCollarThresholds(newHighActivityThreshold: double.parse((highActivityThreshold - 0.01).clamp(0, 999).toStringAsFixed(2)));
 
   @override
   void initState() {
     super.initState();
-    _fetchCollarThresholds();
+    _fetchActivityThresholds();
   }
 
-  Future<void> _fetchCollarThresholds() async {
+  Future<void> _fetchActivityThresholds() async {
     setState(() => _loading = true);
     try {
-      final userResp = await AuthService.instance.fetchUserWithCats();
-      final cats = userResp?['extras']?['cats'] as List?;
-      if (cats == null || cats.isEmpty) {
+      // Récupérer l'ID du chat de l'utilisateur
+      final userResponse = await http.get(
+        Uri.parse('http://localhost:3000/api/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (userResponse.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des données utilisateur');
+      }
+
+      final userData = jsonDecode(userResponse.body);
+      if (userData['state'] != true || userData['extras'] == null || 
+          userData['extras']['cats'] == null || 
+          (userData['extras']['cats'] as List).isEmpty) {
         setState(() => _loading = false);
         return;
       }
-      final firstCat = cats.first;
-      final thresholds = firstCat['activityThresholds'] as Map<String, dynamic>?;
-      final collar = thresholds?['collar'] ?? {};
-      setState(() {
-        _catId = firstCat['id'] as String?;
-        _catThresholds = thresholds;
-        inactivityHours = collar['inactivityHours'] ?? 0;
-        movementThreshold = (collar['movementThreshold'] ?? 0).toDouble();
-        lowActivityThreshold = (collar['lowActivityThreshold'] ?? 0).toDouble();
-        highActivityThreshold = (collar['highActivityThreshold'] ?? 0).toDouble();
-        _loading = false;
-      });
+
+      final firstCat = (userData['extras']['cats'] as List).first;
+      _catId = firstCat['id'] as String?;
+
+      // Récupérer les RuuviTags
+      final ruuviTagsResponse = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (ruuviTagsResponse.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des RuuviTags');
+      }
+
+      final ruuviTagsData = jsonDecode(ruuviTagsResponse.body);
+      if (ruuviTagsData['state'] == true && ruuviTagsData['data'] != null) {
+        final allTags = (ruuviTagsData['data'] as List)
+            .map((tag) => RuuviTag.fromJson(tag))
+            .toList();
+        
+        // Trouver le RuuviTag de type COLLAR pour ce chat
+        final collarTag = allTags.firstWhere(
+          (tag) => tag.type == RuuviTagType.collar && 
+                   tag.catIds != null && 
+                   tag.catIds!.contains(_catId),
+          orElse: () => throw Exception('Aucun capteur de collier trouvé'),
+        );
+
+        _ruuviTagId = collarTag.id;
+        
+        // Récupérer les seuils de collier
+        final collarThresholds = collarTag.alertThresholds?['collar'] as Map<String, dynamic>?;
+        
+        setState(() {
+          inactivityHours = collarThresholds?['inactivityHours'] ?? 8;
+          _loading = false;
+        });
+      } else {
+        throw Exception('Aucun RuuviTag trouvé');
+      }
     } catch (e) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _updateCollarThresholds({int? newInactivityHours}) async {
+    if (_ruuviTagId == null) return;
+
+    try {
+      setState(() => _loading = true);
+
+      // Récupérer les seuils actuels du RuuviTag
+      final response = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des seuils actuels');
+      }
+
+      final data = jsonDecode(response.body);
+      final allTags = (data['data'] as List)
+          .map((tag) => RuuviTag.fromJson(tag))
+          .toList();
+      
+      final currentTag = allTags.firstWhere(
+        (tag) => tag.id == _ruuviTagId,
+      );
+
+      // Mettre à jour les seuils de collier
+      final updatedThresholds = Map<String, dynamic>.from(currentTag.alertThresholds ?? {});
+      if (updatedThresholds['collar'] == null) {
+        updatedThresholds['collar'] = {};
+      }
+      
+      if (newInactivityHours != null) {
+        updatedThresholds['collar']['inactivityHours'] = newInactivityHours;
+      }
+
+      // Envoyer la mise à jour
+      final updateResponse = await http.patch(
+        Uri.parse('http://localhost:3000/api/ruuvitags/$_ruuviTagId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+        body: jsonEncode({
+          'alertThresholds': updatedThresholds,
+        }),
+      );
+
+      if (updateResponse.statusCode == 200) {
+        setState(() {
+          if (newInactivityHours != null) inactivityHours = newInactivityHours;
+          _loading = false;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Seuils mis à jour avec succès')),
+          );
+        }
+      } else {
+        throw Exception('Erreur lors de la mise à jour: ${updateResponse.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+    }
+  }
+
+  void incInactivityHours() {
+    final newValue = (inactivityHours + 1).clamp(1, 24);
+    setState(() => inactivityHours = newValue);
+    _updateCollarThresholds(newInactivityHours: newValue);
+  }
+
+  void decInactivityHours() {
+    final newValue = (inactivityHours - 1).clamp(1, 24);
+    setState(() => inactivityHours = newValue);
+    _updateCollarThresholds(newInactivityHours: newValue);
   }
 
   @override
@@ -122,7 +198,7 @@ class _ActivitySettingsPageState extends State<ActivitySettingsPage> {
               title: 'Heures d\'inactivité',
               child: Row(
                 children: [
-                  _SmallButton(icon: Icons.remove, onTap: decInactivity),
+                  _SmallButton(icon: Icons.remove, onTap: decInactivityHours),
                   const SizedBox(width: 8),
                   Container(
                     width: 60,
@@ -135,76 +211,7 @@ class _ActivitySettingsPageState extends State<ActivitySettingsPage> {
                     child: Text('$inactivityHours h'),
                   ),
                   const SizedBox(width: 8),
-                  _SmallButton(icon: Icons.add, onTap: incInactivity),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            _SettingCard(
-              icon: Icons.directions_run,
-              title: 'Seuil de mouvement',
-              child: Row(
-                children: [
-                  _SmallButton(icon: Icons.remove, onTap: decMovement),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 60,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(movementThreshold.toString()),
-                  ),
-                  const SizedBox(width: 8),
-                  _SmallButton(icon: Icons.add, onTap: incMovement),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            _SettingCard(
-              icon: Icons.trending_down,
-              title: 'Seuil activité basse',
-              child: Row(
-                children: [
-                  _SmallButton(icon: Icons.remove, onTap: decLowActivity),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 60,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(lowActivityThreshold.toString()),
-                  ),
-                  const SizedBox(width: 8),
-                  _SmallButton(icon: Icons.add, onTap: incLowActivity),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            _SettingCard(
-              icon: Icons.trending_up,
-              title: 'Seuil activité haute',
-              child: Row(
-                children: [
-                  _SmallButton(icon: Icons.remove, onTap: decHighActivity),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 60,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(highActivityThreshold.toString()),
-                  ),
-                  const SizedBox(width: 8),
-                  _SmallButton(icon: Icons.add, onTap: incHighActivity),
+                  _SmallButton(icon: Icons.add, onTap: incInactivityHours),
                 ],
               ),
             ),

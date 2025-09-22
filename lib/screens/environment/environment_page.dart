@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/services/api_provider.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../core/services/auth_state.dart';
+import 'package:go_router/go_router.dart'; 
 
 class EnvironmentPage extends StatefulWidget {
   const EnvironmentPage({super.key});
@@ -13,6 +17,7 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
   double? _temperature;
   int? _humidity;
   bool _loading = true;
+  List<Map<String, dynamic>> _historicalData = [];
 
   @override
   void initState() {
@@ -22,31 +27,148 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
 
   Future<void> _fetchSensorData() async {
     final api = ApiProvider.instance.get();
-    final data = await api.fetchLatestSensorData(api.defaultCatId);
-    setState(() {
-      _temperature = data != null && data['temperature'] != null ? (data['temperature'] as num).toDouble() : null;
-      _humidity = data != null && data['humidity'] != null ? (data['humidity'] as num).toInt() : null;
-      _loading = false;
-    });
+    // Récupérer le vrai catId depuis les données utilisateur
+    final catId = await _getUserCatId();
+    if (catId != null) {
+      // Récupérer les données actuelles
+      final data = await api.fetchLatestSensorData(catId);
+      
+      // Récupérer les données d'historique
+      final historicalData = await _fetchHistoricalData(catId);
+      
+      setState(() {
+        _temperature = data != null && data['temperature'] != null ? (data['temperature'] as num).toDouble() : null;
+        _humidity = data != null && data['humidity'] != null ? (data['humidity'] as num).toInt() : null;
+        _historicalData = historicalData;
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchHistoricalData(String catId) async {
+    try {
+      final token = AuthState.instance.accessToken;
+      if (token == null || token.isEmpty) return [];
+
+      // Récupérer les données d'historique depuis l'API
+      final response = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags/data?catIds=$catId&hours=24'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['state'] == true && data['data'] != null) {
+          final sensorData = data['data'] as List;
+          
+          // Filtrer les données d'environnement et les trier par timestamp
+          final envData = sensorData
+              .where((item) => item['catId'] == catId && item['type'] == 'ENVIRONMENT')
+              .cast<Map<String, dynamic>>()
+              .toList();
+          
+          // Trier par timestamp (plus récent en premier)
+          envData.sort((a, b) {
+            final aTime = DateTime.tryParse(a['timestamp'] ?? '');
+            final bTime = DateTime.tryParse(b['timestamp'] ?? '');
+            if (aTime == null || bTime == null) return 0;
+            return bTime.compareTo(aTime);
+          });
+          
+          return envData;
+        }
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération des données d\'historique: $e');
+    }
+    return [];
+  }
+
+  List<FlSpot> _buildTemperatureSpots() {
+    if (_historicalData.isEmpty) return [];
+    
+    final spots = <FlSpot>[];
+    for (int i = 0; i < _historicalData.length && i < 7; i++) {
+      final data = _historicalData[i];
+      final temp = data['temperature'] as num?;
+      if (temp != null) {
+        spots.add(FlSpot(i.toDouble(), temp.toDouble()));
+      }
+    }
+    return spots;
+  }
+
+  List<FlSpot> _buildHumiditySpots() {
+    if (_historicalData.isEmpty) return [];
+    
+    final spots = <FlSpot>[];
+    for (int i = 0; i < _historicalData.length && i < 7; i++) {
+      final data = _historicalData[i];
+      final humidity = data['humidity'] as num?;
+      if (humidity != null) {
+        spots.add(FlSpot(i.toDouble(), humidity.toDouble()));
+      }
+    }
+    return spots;
+  }
+
+  Future<String?> _getUserCatId() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://localhost:3000/api/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['state'] == true && data['extras'] != null) {
+          final cats = data['extras']['cats'] as List<dynamic>?;
+          if (cats != null && cats.isNotEmpty) {
+            return cats[0]['id'] as String;
+          }
+        }
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération du chat utilisateur: $e');
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Environnement"),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: const BackButton(),
+        title: const Text('Environnement'),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => context.push('/settings/environment'),
+            tooltip: 'Paramètres des seuils',
+          ),
+        ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Température et Humidité
+            // Données actuelles
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _InfoCard(
                   title: "Température",
@@ -56,6 +178,7 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
                           ? "${_temperature!.toStringAsFixed(1)}°C"
                           : "-",
                 ),
+                const SizedBox(width: 16),
                 _InfoCard(
                   title: "Humidité",
                   value: _loading
@@ -67,56 +190,58 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
               ],
             ),
             const SizedBox(height: 20),
-            // ...existing code...
+            
+            // Historique avec vraies données
             const Text("Historique", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            _ChartSection(
-              title: "Température",
-              value: _temperature != null ? "${_temperature!.toStringAsFixed(1)}°C" : "-",
-              variation: "+2%",
-              isPositive: true,
-              spots: [
-                FlSpot(0, 21),
-                FlSpot(1, 22),
-                FlSpot(2, 21.5),
-                FlSpot(3, 22.2),
-                FlSpot(4, 21.8),
-                FlSpot(5, 23),
-                FlSpot(6, 22.5),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _ChartSection(
-              title: "Humidité",
-              value: _humidity != null ? "${_humidity!.toString()}%" : "-",
-              variation: "-1%",
-              isPositive: false,
-              spots: [
-                FlSpot(0, 57),
-                FlSpot(1, 56),
-                FlSpot(2, 55.5),
-                FlSpot(3, 54),
-                FlSpot(4, 55),
-                FlSpot(5, 56),
-                FlSpot(6, 55),
-              ],
-            ),
-            const SizedBox(height: 24),
-            // ...existing code...
-            const Text("Alertes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            _AlertCard(
-              icon: Icons.thermostat,
-              title: "Température élevée",
-              subtitle: "Température supérieure à 25°C",
-              time: "Il y a 2h",
-            ),
-            _AlertCard(
-              icon: Icons.water_drop,
-              title: "Faible humidité",
-              subtitle: "Humidité inférieure à 40%",
-              time: "Hier",
-            ),
+            
+            if (_historicalData.isNotEmpty) ...[
+              _ChartSection(
+                title: "Température",
+                value: _temperature != null ? "${_temperature!.toStringAsFixed(1)}°C" : "-",
+                variation: _historicalData.length > 1 ? "+0%" : "N/A",
+                isPositive: true,
+                spots: _buildTemperatureSpots(),
+              ),
+              const SizedBox(height: 24),
+              _ChartSection(
+                title: "Humidité",
+                value: _humidity != null ? "${_humidity!.toString()}%" : "-",
+                variation: _historicalData.length > 1 ? "+0%" : "N/A",
+                isPositive: false,
+                spots: _buildHumiditySpots(),
+              ),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.history, size: 48, color: Colors.grey[400]),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Aucune donnée d\'historique disponible',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'L\'historique apparaîtra ici une fois que les capteurs enverront des données.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -231,34 +356,6 @@ class _ChartSection extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Carte alerte
-class _AlertCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String time;
-
-  const _AlertCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.time,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.blue),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: Text(time, style: const TextStyle(fontSize: 12)),
-      ),
     );
   }
 }

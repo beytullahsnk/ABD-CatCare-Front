@@ -91,8 +91,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (typeResult != null) {
       setState(() {
         _ruuviTags.add(RuuviTag(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          ruuviTagId: typeResult['ruuviTagId'],
+          id: typeResult['ruuviTagId'], 
           type: typeResult['type'],
         ));
       });
@@ -109,25 +108,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _submitting = true);
     try {
+      // Log des données à envoyer
+      final requestData = {
+        'email': _email.text.trim(),
+        'username': (_firstName.text.trim() + '.' + _lastName.text.trim()).replaceAll(' ', ''),
+        'phoneNumber': _phone.text.trim(),
+        'password': _password.text,
+      };
+      
+      print('🔍 Données d\'inscription à envoyer: $requestData');
+      print(' URL: http://localhost:3000/api/auth/register');
+      
       final response = await http.post(
-        Uri.parse('http://localhost:3000/auth/register'),
+        Uri.parse('http://localhost:3000/api/auth/register'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _email.text.trim(),
-          'username': (_firstName.text.trim() + '.' + _lastName.text.trim()).replaceAll(' ', ''),
-          'phoneNumber': _phone.text.trim(),
-          'password': _password.text,
-          'ruuviTags': _ruuviTags.map((tag) => tag.toJson()).toList(),
-        }),
+        body: jsonEncode(requestData),
       );
+      
+      print('📡 Réponse reçue:');
+      print('   Status Code: ${response.statusCode}');
+      print('   Headers: ${response.headers}');
+      print('   Body: ${response.body}');
+      
       final cs = Theme.of(context).colorScheme;
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
+        print('✅ Données parsées: $data');
         if (data['state'] == true) {
+          print('✅ Inscription réussie, connexion automatique...');
           await AuthState.instance.signInWithApiResponse(data['data'], rawEmail: _email.text.trim());
           if (!mounted) return;
           context.go('/dashboard');
         } else {
+          print('❌ Échec inscription: ${data['message']}');
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -137,13 +150,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           );
         }
       } else {
+        print('❌ Erreur HTTP: ${response.statusCode}');
         if (!mounted) return;
         String errorMsg = "Erreur serveur (${response.statusCode})";
         try {
           final errBody = response.body;
           if (errBody.isNotEmpty) {
             errorMsg += '\n' + errBody;
-            print('Erreur API register: $errBody');
+            print('❌ Erreur API register: $errBody');
           }
         } catch (_) {}
         ScaffoldMessenger.of(context).showSnackBar(
@@ -154,6 +168,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     } catch (e) {
+      print('💥 Exception capturée: $e');
       if (!mounted) return;
       final cs = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -193,7 +208,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: Icon(_getRuuviTagIcon(tag.type)),
-        title: Text(tag.ruuviTagId),
+        title: Text(tag.id), 
         subtitle: Text(tag.type.displayName),
         trailing: IconButton(
           icon: const Icon(Icons.delete, color: Colors.red),

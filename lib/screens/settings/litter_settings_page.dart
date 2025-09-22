@@ -1,7 +1,9 @@
 
 import 'package:flutter/material.dart';
-import '../../core/services/auth_service.dart';
-import '../../core/services/api_client.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../core/services/auth_state.dart';
+import '../../models/ruuvi_tag.dart';
 
 class LitterPageSettings extends StatefulWidget {
   const LitterPageSettings({Key? key}) : super(key: key);
@@ -11,13 +13,12 @@ class LitterPageSettings extends StatefulWidget {
 }
 
 class _LitterPageState extends State<LitterPageSettings> {
-  int? humidity;
-  int? passages;
+  int? dailyUsageMax;
   bool notifications = true;
   bool loading = true;
   String? error;
-  Map<String, dynamic>? _catThresholds;
   String? _catId;
+  String? _ruuviTagId;
 
   @override
   void initState() {
@@ -31,75 +32,164 @@ class _LitterPageState extends State<LitterPageSettings> {
       error = null;
     });
     try {
-      final userResp = await AuthService.instance.fetchUserWithCats();
-      if (userResp == null || userResp['extras'] == null || userResp['extras']['cats'] == null || (userResp['extras']['cats'] as List).isEmpty) {
+      // Récupérer l'ID du chat de l'utilisateur
+      final userResponse = await http.get(
+        Uri.parse('http://localhost:3000/api/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (userResponse.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des données utilisateur');
+      }
+
+      final userData = jsonDecode(userResponse.body);
+      if (userData['state'] != true || userData['extras'] == null || 
+          userData['extras']['cats'] == null || 
+          (userData['extras']['cats'] as List).isEmpty) {
         setState(() {
           error = "Aucun chat trouvé.";
           loading = false;
         });
         return;
       }
-      final firstCat = (userResp['extras']['cats'] as List).first;
-      final thresholds = firstCat['activityThresholds'] as Map<String, dynamic>?;
-      final litter = thresholds?['litter'] as Map<String, dynamic>?;
-      setState(() {
-        humidity = litter?['humidityMax'] ?? 40;
-        passages = litter?['dailyUsageMax'] ?? 3;
-        _catThresholds = thresholds;
-        _catId = firstCat['id'] as String?;
-        loading = false;
-      });
+
+      final firstCat = (userData['extras']['cats'] as List).first;
+      _catId = firstCat['id'] as String?;
+
+      // Récupérer les RuuviTags
+      final ruuviTagsResponse = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (ruuviTagsResponse.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des RuuviTags');
+      }
+
+      final ruuviTagsData = jsonDecode(ruuviTagsResponse.body);
+      if (ruuviTagsData['state'] == true && ruuviTagsData['data'] != null) {
+        final allTags = (ruuviTagsData['data'] as List)
+            .map((tag) => RuuviTag.fromJson(tag))
+            .toList();
+        
+        // Trouver le RuuviTag de type LITTER pour ce chat
+        final litterTag = allTags.firstWhere(
+          (tag) => tag.type == RuuviTagType.litter && 
+                   tag.catIds != null && 
+                   tag.catIds!.contains(_catId),
+          orElse: () => throw Exception('Aucun capteur de litière trouvé'),
+        );
+
+        _ruuviTagId = litterTag.id;
+        
+        // Récupérer les seuils de litière
+        final litterThresholds = litterTag.alertThresholds?['litter'] as Map<String, dynamic>?;
+        
+        setState(() {
+          dailyUsageMax = litterThresholds?['dailyUsageMax'] ?? 10;
+          loading = false;
+        });
+      } else {
+        throw Exception('Aucun RuuviTag trouvé');
+      }
     } catch (e) {
       setState(() {
-        error = "Erreur lors du chargement.";
+        error = "Erreur lors du chargement: $e";
         loading = false;
       });
     }
   }
 
-  Future<void> _updateThresholds({int? newHumidity, int? newPassages}) async {
-    if (_catId == null || _catThresholds == null) return;
-    final collar = Map<String, dynamic>.from(_catThresholds!['collar'] ?? {});
-    final environment = Map<String, dynamic>.from(_catThresholds!['environment'] ?? {});
-    final litter = Map<String, dynamic>.from(_catThresholds!['litter'] ?? {});
-    if (newHumidity != null) litter['humidityMax'] = newHumidity;
-    if (newPassages != null) litter['dailyUsageMax'] = newPassages;
-    // Correction: dailyUsageMin ne doit jamais être null
-    if (litter['dailyUsageMin'] == null) litter['dailyUsageMin'] = 1;
-    final body = {
-      'collar': collar,
-      'environment': environment,
-      'litter': litter,
-    };
-  await ApiClient.instance.updateCatThresholds(_catId!, body, headers: AuthService.instance.authHeader);
-    setState(() {
-      _catThresholds = {
-        'collar': collar,
-        'environment': environment,
-        'litter': litter,
-      };
-    });
+  Future<void> _updateThresholds({int? newDailyUsageMax}) async {
+    if (_ruuviTagId == null) return;
+
+    try {
+      setState(() {
+        loading = true;
+        error = null;
+      });
+
+      // Récupérer les seuils actuels du RuuviTag
+      final response = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des seuils actuels');
+      }
+
+      final data = jsonDecode(response.body);
+      final allTags = (data['data'] as List)
+          .map((tag) => RuuviTag.fromJson(tag))
+          .toList();
+      
+      final currentTag = allTags.firstWhere(
+        (tag) => tag.id == _ruuviTagId,
+      );
+
+      // Mettre à jour les seuils de litière
+      final updatedThresholds = Map<String, dynamic>.from(currentTag.alertThresholds ?? {});
+      if (updatedThresholds['litter'] == null) {
+        updatedThresholds['litter'] = {};
+      }
+      
+      if (newDailyUsageMax != null) {
+        updatedThresholds['litter']['dailyUsageMax'] = newDailyUsageMax;
+      }
+
+      // Envoyer la mise à jour
+      final updateResponse = await http.patch(
+        Uri.parse('http://localhost:3000/api/ruuvitags/$_ruuviTagId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+        body: jsonEncode({
+          'alertThresholds': updatedThresholds,
+        }),
+      );
+
+      if (updateResponse.statusCode == 200) {
+        setState(() {
+          if (newDailyUsageMax != null) dailyUsageMax = newDailyUsageMax;
+          loading = false;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Seuils mis à jour avec succès')),
+          );
+        }
+      } else {
+        throw Exception('Erreur lors de la mise à jour: ${updateResponse.statusCode}');
+      }
+    } catch (e) {
+      setState(() {
+        error = "Erreur lors de la mise à jour: $e";
+        loading = false;
+      });
+    }
   }
 
-  void incHumidity() {
-    final newValue = ((humidity ?? 0) + 1).clamp(0, 100);
-    setState(() => humidity = newValue);
-    _updateThresholds(newHumidity: newValue);
+  void incDailyUsageMax() {
+    final newValue = ((dailyUsageMax ?? 0) + 1).clamp(0, 100);
+    setState(() => dailyUsageMax = newValue);
+    _updateThresholds(newDailyUsageMax: newValue);
   }
-  void decHumidity() {
-    final newValue = ((humidity ?? 0) - 1).clamp(0, 100);
-    setState(() => humidity = newValue);
-    _updateThresholds(newHumidity: newValue);
-  }
-  void incPassages() {
-    final newValue = ((passages ?? 0) + 1);
-    setState(() => passages = newValue);
-    _updateThresholds(newPassages: newValue);
-  }
-  void decPassages() {
-    final newValue = ((passages ?? 0) - 1).clamp(0, 999);
-    setState(() => passages = newValue);
-    _updateThresholds(newPassages: newValue);
+  void decDailyUsageMax() {
+    final newValue = ((dailyUsageMax ?? 0) - 1).clamp(0, 100);
+    setState(() => dailyUsageMax = newValue);
+    _updateThresholds(newDailyUsageMax: newValue);
   }
 
   @override
@@ -121,35 +211,12 @@ class _LitterPageState extends State<LitterPageSettings> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _SettingCard(
-                        icon: Icons.water_drop,
-                        title: "Seuil d'alerte du taux d'humidité",
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            _SmallButton(icon: Icons.remove, onTap: decHumidity),
-                            const SizedBox(width: 8),
-                            Container(
-                              width: 80,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                  color: theme.colorScheme.surfaceVariant,
-                                  borderRadius: BorderRadius.circular(8)),
-                              child: Text(humidity != null ? '$humidity%' : '-'),
-                            ),
-                            const SizedBox(width: 8),
-                            _SmallButton(icon: Icons.add, onTap: incHumidity),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _SettingCard(
                         icon: Icons.directions_walk,
-                        title: 'Seuil de passages',
+                        title: "Seuil de passages",
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            _SmallButton(icon: Icons.remove, onTap: decPassages),
+                            _SmallButton(icon: Icons.remove, onTap: decDailyUsageMax),
                             const SizedBox(width: 8),
                             Container(
                               width: 60,
@@ -158,10 +225,10 @@ class _LitterPageState extends State<LitterPageSettings> {
                               decoration: BoxDecoration(
                                   color: theme.colorScheme.surfaceVariant,
                                   borderRadius: BorderRadius.circular(8)),
-                              child: Text(passages != null ? '$passages' : '-'),
+                              child: Text(dailyUsageMax != null ? '$dailyUsageMax' : '-'),
                             ),
                             const SizedBox(width: 8),
-                            _SmallButton(icon: Icons.add, onTap: incPassages),
+                            _SmallButton(icon: Icons.add, onTap: incDailyUsageMax),
                           ],
                         ),
                       ),

@@ -33,21 +33,28 @@ class _ProfilePageState extends State<ProfilePage> {
         _errorMessage = null;
       });
 
-      final token = AuthState.instance.refreshToken;
+      final token = AuthState.instance.accessToken; 
+      print('🔑 Token utilisé: ${token?.substring(0, 20)}...'); // Log partiel du token
+      
       if (token == null || token.isEmpty) {
         throw Exception('Token d\'authentification manquant');
       }
 
+      print('📡 Appel API /api/users/me...');
       final response = await http.get(
-        Uri.parse('http://localhost:3000/users/me'),
+        Uri.parse('http://localhost:3000/api/users/me'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
         },
       );
 
+      print('📡 Réponse reçue: ${response.statusCode}');
+      print(' Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        print('Réponse /api/users/me: $data');
         if (data['state'] == true && data['data'] != null) {
           final userData = data['data'];
           final extras = data['extras'];
@@ -55,6 +62,7 @@ class _ProfilePageState extends State<ProfilePage> {
           // Récupérer le premier chat (pour l'instant, on assume un chat par utilisateur)
           if (extras != null && extras['cats'] != null && extras['cats'].isNotEmpty) {
             final cat = extras['cats'][0]; // Premier chat
+            print('Chat trouvé: $cat');
             setState(() {
               _catData = {
                 'id': cat['id'],
@@ -67,13 +75,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 'healthNotes': cat['healthNotes'],
               };
               
-              // TODO: Remplacer par l'appel API réel quand le backend sera mis à jour
-              // _loadRuuviTags(cat['id']);
-              
-              // Données simulées pour les RuuviTags en attendant la mise à jour du backend
-              _loadSimulatedRuuviTags();
+              // Récupérer les RuuviTags depuis le backend
+              _loadRuuviTags(cat['id']);
             });
           } else {
+            print('Aucun chat trouvé dans la réponse.');
             setState(() {
               _catData = null;
               _ruuviTags = [];
@@ -82,14 +88,23 @@ class _ProfilePageState extends State<ProfilePage> {
         } else {
           throw Exception(data['message'] ?? 'Erreur lors du chargement des données');
         }
+      } else if (response.statusCode == 401) {
+        print('❌ Token expiré (401) - Déconnexion automatique');
+        // Déconnecter l'utilisateur et rediriger vers la page de connexion
+        await AuthState.instance.signOut();
+        if (mounted) {
+          context.push('/login');
+        }
+        return;
       } else {
+        print('❌ Erreur HTTP: ${response.statusCode}');
         throw Exception('Erreur serveur: ${response.statusCode}');
       }
     } catch (e) {
+      print('❌ Erreur dans _loadUserData: $e');
       setState(() {
         _errorMessage = e.toString();
       });
-      print('Erreur lors du chargement des données utilisateur: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -97,60 +112,62 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  /// TODO: Remplacer cette méthode par l'appel API réel quand le backend sera mis à jour
-  /// Exemple de structure attendue pour l'API future :
-  /// GET /cats/{catId}/ruuvi-tags
-  /// ou GET /users/me/ruuvi-tags
+  /// Récupère les RuuviTags depuis le backend
   Future<void> _loadRuuviTags(String catId) async {
     try {
-      final token = AuthState.instance.refreshToken;
+      final token = AuthState.instance.accessToken;
       if (token == null || token.isEmpty) return;
 
-      // TODO: Remplacer par l'endpoint réel
-      // final response = await http.get(
-      //   Uri.parse('http://localhost:3000/cats/$catId/ruuvi-tags'),
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': 'Bearer $token',
-      //   },
-      // );
+      print(' Recherche des RuuviTags pour le chat: $catId');
 
-      // if (response.statusCode == 200) {
-      //   final data = jsonDecode(response.body);
-      //   if (data['state'] == true && data['data'] != null) {
-      //     setState(() {
-      //       _ruuviTags = (data['data'] as List)
-      //           .map((tag) => RuuviTag.fromJson(tag))
-      //           .toList();
-      //     });
-      //   }
-      // }
+      final response = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      print(' Réponse RuuviTags: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['state'] == true && data['data'] != null) {
+          // Filtrer les RuuviTags qui appartiennent au chat
+          final allTags = (data['data'] as List)
+              .map((tag) => RuuviTag.fromJson(tag))
+              .toList();
+          
+          print('📋 Tous les RuuviTags: ${allTags.length}');
+          for (final tag in allTags) {
+            print('   - ID: ${tag.id}, Type: ${tag.type.value}, CatIds: ${tag.catIds}');
+          }
+          
+          final userTags = allTags.where((tag) => 
+            tag.catIds != null && tag.catIds!.contains(catId)
+          ).toList();
+          
+          print('🏷️ RuuviTags trouvés pour le chat $catId: ${userTags.length}');
+          for (final tag in userTags) {
+            print('   ✅ ${tag.id} (${tag.type.value})');
+          }
+          
+          setState(() {
+            _ruuviTags = userTags;
+          });
+        }
+      } else {
+        print('Erreur backend (${response.statusCode}), liste des RuuviTags vide');
+        setState(() {
+          _ruuviTags = [];
+        });
+      }
     } catch (e) {
       print('Erreur lors du chargement des RuuviTags: $e');
+      setState(() {
+        _ruuviTags = [];
+      });
     }
-  }
-
-  /// Données simulées pour les RuuviTags en attendant la mise à jour du backend
-  void _loadSimulatedRuuviTags() {
-    setState(() {
-      _ruuviTags = [
-        RuuviTag(
-          id: '1',
-          ruuviTagId: '677224097',
-          type: RuuviTagType.collar,
-        ),
-        RuuviTag(
-          id: '2',
-          ruuviTagId: '791308911',
-          type: RuuviTagType.environment,
-        ),
-        RuuviTag(
-          id: '3',
-          ruuviTagId: '333419537',
-          type: RuuviTagType.litter,
-        ),
-      ];
-    });
   }
 
   Future<void> _updateCat(Map<String, dynamic> updatedData) async {
@@ -161,10 +178,10 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       final response = await http.put(
-        Uri.parse('http://localhost:3000/cats/${_catData!['id']}'),
+        Uri.parse('http://localhost:3000/api/cats/${_catData!['id']}'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
         },
         body: jsonEncode(updatedData),
       );
@@ -208,10 +225,10 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       final response = await http.put(
-        Uri.parse('http://localhost:3000/users/$userId'),
+        Uri.parse('http://localhost:3000/api/users/$userId'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
         },
         body: jsonEncode(updatedData),
       );
@@ -266,9 +283,9 @@ class _ProfilePageState extends State<ProfilePage> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    final user = AuthState.instance.user;
-    final username = user?['username'] ?? 'Nom utilisateur';
-    final email = user?['email'] ?? user?['encryptedEmail'] ?? 'adresse@exemple.com';
+  final user = AuthState.instance.user;
+  final username = user?['username'] ?? 'Nom utilisateur';
+  final email = user?['email'] ?? user?['encryptedEmail'] ?? 'adresse@exemple.com';
 
     return Scaffold(
       appBar: AppBar(
@@ -280,11 +297,6 @@ class _ProfilePageState extends State<ProfilePage> {
             icon: const Icon(Icons.refresh),
             onPressed: _loadUserData,
           ),
-          if (_catData != null)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () => _showEditCatDialog(),
-            ),
         ],
       ),
       body: _isLoading
@@ -292,8 +304,8 @@ class _ProfilePageState extends State<ProfilePage> {
           : _errorMessage != null
               ? _buildErrorWidget()
               : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
+        padding: const EdgeInsets.all(16),
+        children: [
                     // Header utilisateur
                     _buildUserHeader(theme, username, email),
                     const SizedBox(height: 24),
@@ -305,11 +317,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     // Section Capteurs
                     _buildSensorsSection(),
                     const SizedBox(height: 24),
-
-                    // Réglages rapides
-                    _buildSettingsSection(theme),
-                    const SizedBox(height: 24),
-
+                    
                     // Déconnexion
                     TextButton.icon(
                       onPressed: () async {
@@ -326,60 +334,25 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildUserHeader(ThemeData theme, String username, String email) {
     return Row(
-      children: [
-        CircleAvatar(
-          radius: 28,
-          child: const Icon(Icons.pets, size: 28),
-        ),
-        const SizedBox(width: 12),
+            children: [
+              CircleAvatar(
+                radius: 28,
+                child: const Icon(Icons.pets, size: 28),
+              ),
+              const SizedBox(width: 12),
         Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(username, style: theme.textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(email, style: theme.textTheme.bodySmall),
-            ],
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(username, style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 4),
+                  Text(email, style: theme.textTheme.bodySmall),
+                ],
           ),
         ),
         IconButton(
           icon: const Icon(Icons.edit),
           onPressed: () => _showEditUserDialog(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSettingsSection(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Réglages rapides',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _buildSettingsCard(
-          icon: Icons.favorite_border,
-          title: 'Activité',
-          subtitle: 'Seuil d\'activité',
-          onTap: () => context.push('/settings/activity'),
-        ),
-        const SizedBox(height: 8),
-        _buildSettingsCard(
-          icon: Icons.inventory_2,
-          title: 'Litière',
-          subtitle: 'Humidité et récurrence',
-          onTap: () => context.push('/settings/litter'),
-        ),
-        const SizedBox(height: 8),
-        _buildSettingsCard(
-          icon: Icons.thermostat,
-          title: 'Environnement',
-          subtitle: 'Température et humidité',
-          onTap: () => context.push('/settings/environment'),
         ),
       ],
     );
@@ -397,7 +370,7 @@ class _ProfilePageState extends State<ProfilePage> {
               size: 64,
               color: Colors.red[300],
             ),
-            const SizedBox(height: 16),
+          const SizedBox(height: 16),
             Text(
               'Erreur de chargement',
               style: TextStyle(
@@ -406,7 +379,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 color: Colors.red[700],
               ),
             ),
-            const SizedBox(height: 8),
+          const SizedBox(height: 8),
             Text(
               _errorMessage ?? 'Une erreur inconnue s\'est produite',
               textAlign: TextAlign.center,
@@ -430,7 +403,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildCatSection() {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
+            shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
@@ -523,7 +496,7 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
+                decoration: BoxDecoration(
                     color: Theme.of(context).primaryColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -539,24 +512,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                // Indicateur que les données sont simulées
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    'Simulé',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.orange[700],
-                      fontWeight: FontWeight.w500,
-                    ),
                   ),
                 ),
               ],
@@ -634,7 +589,7 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Container(
             padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
+                decoration: BoxDecoration(
               color: Theme.of(context).primaryColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(6),
             ),
@@ -657,7 +612,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
                 Text(
-                  'ID: ${tag.ruuviTagId}',
+                  'ID: ${tag.id}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
@@ -668,39 +623,6 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      color: Colors.white,
-      elevation: 0,
-      shadowColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
-      child: ListTile(
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: Theme.of(context).colorScheme.onSecondaryContainer),
-        ),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
       ),
     );
   }
@@ -926,7 +848,7 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
+                decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
               ),

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/ruuvi_tag.dart';
 import '../scan/qr_scanner_screen.dart';
 import '../scan/sensor_type_selection_screen.dart';
+import '../scan/threshold_configuration_screen.dart'; 
 import '../widgets/primary_button.dart';
 
 class AddCatStepperPage extends StatefulWidget {
@@ -134,50 +135,92 @@ class _AddCatStepperPageState extends State<AddCatStepperPage> {
     setState(() => _isSubmitting = true);
     
     try {
+      final cs = Theme.of(context).colorScheme;
+      
+      // Étape 1: Créer le chat
+      print('Étape 1: Création du chat...');
       final userId = AuthState.instance.user?["id"] ?? "";
-      final catData = {
-        "name": _nameController.text.trim(),
-        "breed": _breedController.text.trim(),
-        "userId": userId,
-        "sensorId": "63ec36e6-5243-41d6-945c-1792f79255ae",
-        "status": "ACTIVE",
-        "birthDate": _birthDateController.text.trim(),
-        "weight": double.tryParse(_weightController.text.trim()),
-        "color": _colorController.text.trim(),
-        "gender": _selectedGender,
-        "microchipId": "123456789012345",
-        "healthNotes": _healthNotesController.text.trim(),
-        "ruuviTags": _ruuviTags.map((tag) => tag.toJson()).toList(),
-      };
-
-      final token = AuthState.instance.refreshToken;
-      final response = await http.post(
-        Uri.parse('http://localhost:3000/cats'),
+      final catResponse = await http.post(
+        Uri.parse('http://localhost:3000/api/cats'),
         headers: {
           'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
         },
-        body: jsonEncode(catData),
+        body: jsonEncode({
+          'name': _nameController.text.trim(),
+          'breed': _breedController.text.trim(),
+          'userId': userId,
+          'birthDate': _birthDateController.text.trim(),
+          'weight': double.tryParse(_weightController.text.trim()),
+          'color': _colorController.text.trim(),
+          'gender': _selectedGender,
+          'healthNotes': _healthNotesController.text.trim(),
+        }),
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Chat ajouté avec succès !')),
-        );
-        context.go('/dashboard');
-      } else {
-        if (!mounted) return;
-        print('Erreur API: ${response.statusCode} - ${response.body}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: ${response.body}')),
-        );
+      if (catResponse.statusCode < 200 || catResponse.statusCode >= 300) {
+        throw Exception('Erreur création chat: ${catResponse.statusCode} - ${catResponse.body}');
       }
-    } catch (e) {
+
+      final catData = jsonDecode(catResponse.body);
+      if (catData['state'] != true) {
+        throw Exception('Échec création chat: ${catData['message']}');
+      }
+
+      final catId = catData['data']['id'];
+      print('Chat créé avec l\'ID: $catId');
+
+      // Étape 2: Créer les RuuviTags
+      print('Étape 2: Création des RuuviTags...');
+      for (int i = 0; i < _ruuviTags.length; i++) {
+        final tag = _ruuviTags[i];
+        print('Création du RuuviTag ${i + 1}/${_ruuviTags.length}: ${tag.id}');
+        
+        final ruuviTagResponse = await http.post(
+          Uri.parse('http://localhost:3000/api/ruuvitags'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+          },
+          body: jsonEncode({
+            'ruuviTagId': tag.id,
+            'type': tag.type.value,
+            'catIds': [catId],
+            'alertThresholds': tag.alertThresholds,
+          }),
+        );
+
+        if (ruuviTagResponse.statusCode < 200 || ruuviTagResponse.statusCode >= 300) {
+          throw Exception('Erreur création RuuviTag ${tag.id}: ${ruuviTagResponse.statusCode} - ${ruuviTagResponse.body}');
+        }
+
+        final ruuviTagData = jsonDecode(ruuviTagResponse.body);
+        if (ruuviTagData['state'] != true) {
+          throw Exception('Échec création RuuviTag ${tag.id}: ${ruuviTagData['message']}');
+        }
+        
+        print('RuuviTag ${tag.id} créé avec succès');
+      }
+
+      // Succès - Redirection vers le dashboard
       if (!mounted) return;
-      print('Erreur réseau: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur réseau: $e')),
+        SnackBar(
+          backgroundColor: cs.primary,
+          content: const Text('Chat ajouté avec succès !'),
+        ),
+      );
+      context.go('/dashboard');
+
+    } catch (e) {
+      print('Erreur lors de l\'ajout du chat: $e');
+      if (!mounted) return;
+      final cs = Theme.of(context).colorScheme;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: cs.error,
+          content: Text('Erreur: $e'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -588,7 +631,7 @@ class _AddCatStepperPageState extends State<AddCatStepperPage> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: Icon(_getRuuviTagIcon(tag.type)),
-        title: Text(tag.ruuviTagId),
+        title: Text(tag.id),
         subtitle: Text(tag.type.displayName),
         trailing: IconButton(
           icon: const Icon(Icons.delete, color: Colors.red),
@@ -634,19 +677,88 @@ class _AddCatStepperPageState extends State<AddCatStepperPage> {
                   ),
                 ),
                 Text(
-                  'ID: ${tag.ruuviTagId}',
+                  'ID: ${tag.id}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                     fontFamily: 'monospace',
                   ),
                 ),
+                if (tag.alertThresholds != null) ...[
+                  const SizedBox(height: 4),
+                  ..._buildThresholdsInfo(tag.type, tag.alertThresholds!),
+                ],
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _buildThresholdsInfo(RuuviTagType type, Map<String, dynamic> thresholds) {
+    List<Widget> thresholdWidgets = [];
+    
+    switch (type) {
+      case RuuviTagType.collar:
+        if (thresholds['inactivityHours'] != null) {
+          thresholdWidgets.add(
+            Text(
+              'Inactivité: ${thresholds['inactivityHours']}h',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.green[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+        break;
+        
+      case RuuviTagType.environment:
+        if (thresholds['temperatureMin'] != null && thresholds['temperatureMax'] != null) {
+          thresholdWidgets.add(
+            Text(
+              'Température: ${thresholds['temperatureMin']}°C - ${thresholds['temperatureMax']}°C',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.blue[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+        if (thresholds['humidityMin'] != null && thresholds['humidityMax'] != null) {
+          thresholdWidgets.add(
+            Text(
+              'Humidité: ${thresholds['humidityMin']}% - ${thresholds['humidityMax']}%',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.blue[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+        break;
+        
+      case RuuviTagType.litter:
+        if (thresholds['dailyUsageMax'] != null) {
+          thresholdWidgets.add(
+            Text(
+              'Usage max: ${thresholds['dailyUsageMax']} fois/jour',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.orange[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+        break;
+    }
+    
+    return thresholdWidgets;
   }
 
   IconData _getRuuviTagIcon(RuuviTagType type) {
@@ -699,12 +811,40 @@ class _AddCatStepperPageState extends State<AddCatStepperPage> {
     );
     
     if (typeResult != null) {
+      // Naviguer vers la configuration des seuils
+      await _navigateToThresholdConfiguration(
+        typeResult['ruuviTagId'],
+        typeResult['type'],
+      );
+    }
+  }
+
+  Future<void> _navigateToThresholdConfiguration(String ruuviTagId, RuuviTagType type) async {
+    final thresholdResult = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (context) => ThresholdConfigurationScreen(
+          ruuviTagId: ruuviTagId,
+          type: type,
+          onThresholdsConfigured: (id, tagType, thresholds) {
+            Navigator.of(context).pop({
+              'ruuviTagId': id,
+              'type': tagType,
+              'thresholds': thresholds,
+            });
+          },
+        ),
+      ),
+    );
+
+    if (thresholdResult != null) {
       setState(() {
-        _ruuviTags.add(RuuviTag(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          ruuviTagId: typeResult['ruuviTagId'],
-          type: typeResult['type'],
-        ));
+        _ruuviTags.add(
+          RuuviTag(
+            id: thresholdResult['ruuviTagId'],
+            type: thresholdResult['type'],
+            alertThresholds: thresholdResult['thresholds'],
+          ),
+        );
       });
     }
   }

@@ -39,7 +39,7 @@ class _AddCatPageState extends State<AddCatPage> {
       final token = AuthState.instance.refreshToken;
       print('Bearer token utilisé: $token');
       final response = await http.post(
-        Uri.parse('http://localhost:3000/cats'),
+        Uri.parse('http://localhost:3000/api/cats'),
         headers: {
           'Content-Type': 'application/json',
           if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',

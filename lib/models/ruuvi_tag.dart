@@ -10,57 +10,57 @@ enum RuuviTagType {
 
 class RuuviTag {
   final String id;
-  final String ruuviTagId;
   final RuuviTagType type;
-  final String? name;
-  final String? description;
-  final bool isActive;
+  final List<String>? catIds;
+  final Map<String, dynamic>? alertThresholds; 
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   const RuuviTag({
     required this.id,
-    required this.ruuviTagId,
     required this.type,
-    this.name,
-    this.description,
-    this.isActive = true,
+    this.catIds,
+    this.alertThresholds,
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory RuuviTag.fromJson(Map<String, dynamic> json) => RuuviTag(
         id: json['id'] as String? ?? '',
-        ruuviTagId: json['ruuviTagId'] as String? ?? '',
         type: RuuviTagType.values.firstWhere(
           (e) => e.value == json['type'],
           orElse: () => RuuviTagType.environment,
         ),
-        name: json['name'] as String?,
-        description: json['description'] as String?,
-        isActive: json['isActive'] as bool? ?? true,
+        catIds: (json['catIds'] as List?)?.cast<String>(),
+        alertThresholds: json['alertThresholds'] as Map<String, dynamic>?,
+        createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
+        updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'id': id,
-        'ruuviTagId': ruuviTagId,
         'type': type.value,
-        'name': name,
-        'description': description,
-        'isActive': isActive,
+        'catIds': catIds,
+        'alertThresholds': alertThresholds,
+        'createdAt': createdAt?.toIso8601String(),
+        'updatedAt': updatedAt?.toIso8601String(),
       };
 
   RuuviTag copyWith({
     String? id,
-    String? ruuviTagId,
     RuuviTagType? type,
-    String? name,
-    String? description,
-    bool? isActive,
+    List<String>? catIds,
+    Map<String, dynamic>? alertThresholds,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return RuuviTag(
       id: id ?? this.id,
-      ruuviTagId: ruuviTagId ?? this.ruuviTagId,
       type: type ?? this.type,
-      name: name ?? this.name,
-      description: description ?? this.description,
-      isActive: isActive ?? this.isActive,
+      catIds: catIds ?? this.catIds,
+      alertThresholds: alertThresholds ?? this.alertThresholds,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 } 

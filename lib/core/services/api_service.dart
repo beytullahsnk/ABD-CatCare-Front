@@ -1,6 +1,6 @@
-
 import 'dart:convert';
 import 'package:abd_petcare/core/services/auth_service.dart';
+import 'package:abd_petcare/core/services/auth_state.dart'; 
 import 'package:abd_petcare/models/notification_prefs.dart';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
@@ -31,8 +31,131 @@ class RealApiService {
   RealApiService._();
   static final RealApiService instance = RealApiService._();
 
-  // TODO: passer le catId depuis l'état utilisateur (provider/riverpod)
-  String defaultCatId = '123e4567-e89b-12d3-a456-426614174000';
+  // Récupérer le chat de l'utilisateur connecté
+  Future<String?> getUserCatId() async { // Rendre publique
+    try {
+      final token = AuthState.instance.accessToken;
+      if (token == null || token.isEmpty) {
+        print('Token d\'authentification manquant');
+        return null;
+      }
+
+      final resp = await ApiClient.instance.get(
+        '/users/me',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        if (data['state'] == true && data['extras'] != null) {
+          final cats = data['extras']['cats'] as List<dynamic>?;
+          if (cats != null && cats.isNotEmpty) {
+            return cats[0]['id'] as String; // Premier chat de l'utilisateur
+          }
+        }
+      } else if (resp.statusCode == 401) {
+        print('Token expiré, déconnexion nécessaire');
+        // Optionnel: déclencher une déconnexion automatique
+        // AuthState.instance.signOut();
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération du chat utilisateur: $e');
+    }
+    return null;
+  }
+
+  // Méthode pour récupérer les données du dashboard avec le bon chat
+  Future<Map<String, dynamic>> fetchDashboardData() async {
+    try {
+      // Récupérer l'ID du chat de l'utilisateur connecté
+      final catId = await getUserCatId(); // Utiliser la méthode publique
+      if (catId == null) {
+        return <String, dynamic>{
+          'temperature': 0.0,
+          'humidity': 0,
+          'litterHumidity': 0,
+          'lastSeen': DateTime.now().toIso8601String(),
+        };
+      }
+
+      final token = AuthState.instance.accessToken;
+      if (token == null || token.isEmpty) {
+        return <String, dynamic>{
+          'temperature': 0.0,
+          'humidity': 0,
+          'litterHumidity': 0,
+          'lastSeen': DateTime.now().toIso8601String(),
+        };
+      }
+
+      // Récupérer les données des capteurs pour ce chat
+      final resp = await ApiClient.instance.get(
+        '/ruuvitags/data?catIds=$catId',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        if (data['state'] == true && data['data'] != null) {
+          final sensorData = data['data'] as List<dynamic>;
+          
+          double temperature = 0.0;
+          int humidity = 0;
+          int litterHumidity = 0;
+          String lastSeen = DateTime.now().toIso8601String();
+          
+          // Parcourir les données pour extraire les valeurs par type de capteur
+          for (var item in sensorData) {
+            if (item['catId'] == catId) {
+              switch (item['type']) {
+                case 'ENVIRONMENT':
+                  if (item['temperature'] != null) {
+                    temperature = (item['temperature'] as num).toDouble();
+                  }
+                  if (item['humidity'] != null) {
+                    humidity = (item['humidity'] as num).toInt();
+                  }
+                  break;
+                case 'LITTER':
+                  if (item['humidity'] != null) {
+                    litterHumidity = (item['humidity'] as num).toInt();
+                  }
+                  break;
+              }
+              
+              // Garder la timestamp la plus récente
+              if (item['timestamp'] != null) {
+                lastSeen = item['timestamp'];
+              }
+            }
+          }
+          
+          return <String, dynamic>{
+            'temperature': temperature,
+            'humidity': humidity,
+            'litterHumidity': litterHumidity,
+            'lastSeen': lastSeen,
+          };
+        }
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération des données dashboard: $e');
+    }
+    
+    // Retourner des données vides si aucune donnée trouvée
+    return <String, dynamic>{
+      'temperature': 0.0,
+      'humidity': 0,
+      'litterHumidity': 0,
+      'lastSeen': DateTime.now().toIso8601String(),
+    };
+  }
 
   Future<bool> login(String identifier, String password) async {
     final body = {'identifier': identifier, 'password': password};
@@ -50,16 +173,99 @@ class RealApiService {
     return false;
   }
 
-  Future<Map<String, dynamic>?> getSensorStats(String catId,
-      {int hours = 24}) async {
-    final resp = await ApiClient.instance.get(
-      '/sensors/stats/$catId?hours=$hours',
-      headers: AuthService.instance.authHeader,
-    );
-    if (resp.statusCode == 200) {
-      return jsonDecode(resp.body) as Map<String, dynamic>;
+  Future<Map<String, dynamic>?> getSensorStats(String catId, {int hours = 24}) async {
+    try {
+      final token = AuthState.instance.accessToken;
+      if (token == null || token.isEmpty) {
+        return {
+          'temperature': {'avg': 0.0, 'min': 0.0, 'max': 0.0},
+          'humidity': {'avg': 0, 'min': 0, 'max': 0},
+          'litterHumidity': {'avg': 0, 'min': 0, 'max': 0},
+          'lastSeen': DateTime.now().toIso8601String(),
+        };
+      }
+
+      // Récupérer les données des capteurs pour ce chat
+      final resp = await ApiClient.instance.get(
+        '/ruuvitags/data?catIds=$catId',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        if (data['state'] == true && data['data'] != null) {
+          final sensorData = data['data'] as List<dynamic>;
+          
+          // Calculer les moyennes par type de capteur
+          double tempSum = 0;
+          double humiditySum = 0;
+          double litterHumiditySum = 0;
+          int tempCount = 0;
+          int humidityCount = 0;
+          int litterCount = 0;
+          String lastSeen = DateTime.now().toIso8601String();
+          
+          for (var item in sensorData) {
+            if (item['catId'] == catId) {
+              switch (item['type']) {
+                case 'ENVIRONMENT':
+                  if (item['temperature'] != null) {
+                    tempSum += (item['temperature'] as num).toDouble();
+                    tempCount++;
+                  }
+                  if (item['humidity'] != null) {
+                    humiditySum += (item['humidity'] as num).toDouble();
+                    humidityCount++;
+                  }
+                  break;
+                case 'LITTER':
+                  if (item['humidity'] != null) {
+                    litterHumiditySum += (item['humidity'] as num).toDouble();
+                    litterCount++;
+                  }
+                  break;
+              }
+              
+              if (item['timestamp'] != null) {
+                lastSeen = item['timestamp'];
+              }
+            }
+          }
+          
+          return {
+            'temperature': {
+              'avg': tempCount > 0 ? tempSum / tempCount : 0.0,
+              'min': 0.0, // À calculer si nécessaire
+              'max': 0.0, // À calculer si nécessaire
+            },
+            'humidity': {
+              'avg': humidityCount > 0 ? (humiditySum / humidityCount).round() : 0,
+              'min': 0, // À calculer si nécessaire
+              'max': 0, // À calculer si nécessaire
+            },
+            'litterHumidity': {
+              'avg': litterCount > 0 ? (litterHumiditySum / litterCount).round() : 0,
+              'min': 0, // À calculer si nécessaire
+              'max': 0, // À calculer si nécessaire
+            },
+            'lastSeen': lastSeen,
+          };
+        }
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération des données capteurs: $e');
     }
-    return null;
+    
+    // Retourner des données vides si aucune donnée trouvée
+    return {
+      'temperature': {'avg': 0.0, 'min': 0.0, 'max': 0.0},
+      'humidity': {'avg': 0, 'min': 0, 'max': 0},
+      'litterHumidity': {'avg': 0, 'min': 0, 'max': 0},
+      'lastSeen': DateTime.now().toIso8601String(),
+    };
   }
 
   Future<List<dynamic>> getCatAlerts(String catId) async {
@@ -193,7 +399,9 @@ class RealApiService {
   /// Sauvegarde des réglages Activité (fenêtres, seuils, on/off)
   Future<bool> saveActivitySettings(Map<String, dynamic> settings,
       {String? catId}) async {
-    final String cid = catId ?? defaultCatId;
+    final String? cid = catId ?? await getUserCatId();
+    if (cid == null) return false;
+    
     http.Response resp = await ApiClient.instance.post(
       '/users/me/settings/activity',
       settings,
@@ -223,7 +431,9 @@ class RealApiService {
   /// Sauvegarde des réglages Environnement (temp/hum/…)
   Future<bool> saveEnvironmentSettings(Map<String, dynamic> settings,
       {String? catId}) async {
-    final String cid = catId ?? defaultCatId;
+    final String? cid = catId ?? await getUserCatId();
+    if (cid == null) return false;
+    
     http.Response resp = await ApiClient.instance.post(
       '/users/me/settings/environment',
       settings,
@@ -253,7 +463,9 @@ class RealApiService {
   /// Sauvegarde des réglages Litière
   Future<bool> saveLitterSettings(Map<String, dynamic> settings,
       {String? catId}) async {
-    final String cid = catId ?? defaultCatId;
+    final String? cid = catId ?? await getUserCatId();
+    if (cid == null) return false;
+    
     http.Response resp = await ApiClient.instance.post(
       '/users/me/settings/litter',
       settings,
@@ -280,56 +492,15 @@ class RealApiService {
         resp.statusCode == 204;
   }
 
-  // ----- Compat Dashboard (même API que MockApiService) -----
-
-  /// Transforme les stats backend en métriques attendues par le Dashboard
-  /// { temperature: double, humidity: int, litterHumidity: int, lastSeen: String }
-  Future<Map<String, dynamic>> fetchDashboardData() async {
-    try {
-      final http.Response resp = await ApiClient.instance.get(
-        '/sensors/stats/$defaultCatId?hours=24',
-        headers: AuthService.instance.authHeader,
-      );
-      if (resp.statusCode == 200) {
-        final decoded = jsonDecode(resp.body);
-        final Map<String, dynamic> stats = decoded is Map<String, dynamic>
-            ? (decoded['data'] is Map<String, dynamic>
-                ? decoded['data'] as Map<String, dynamic>
-                : decoded)
-            : <String, dynamic>{};
-
-        final tempAvg =
-            (stats['temperature'] is Map && stats['temperature']['avg'] is num)
-                ? (stats['temperature']['avg'] as num).toDouble()
-                : 0.0;
-        final humAvg =
-            (stats['humidity'] is Map && stats['humidity']['avg'] is num)
-                ? (stats['humidity']['avg'] as num).toInt()
-                : 0;
-
-        return <String, dynamic>{
-          'temperature': tempAvg,
-          'humidity': humAvg,
-          // Non fourni par /sensors/stats – on met 0 par défaut tant que la route dédiée n'est pas branchée
-          'litterHumidity': 0,
-          // A défaut d'une dernière mesure, utiliser maintenant
-          'lastSeen': DateTime.now().toIso8601String(),
-        };
-      }
-    } catch (_) {}
-
-    return <String, dynamic>{
-      'temperature': 0.0,
-      'humidity': 0,
-      'litterHumidity': 0,
-      'lastSeen': '',
-    };
-  }
+  // ----- Compat Dashboard (même API que RealApiService) -----
 
   /// Mappe les alertes backend vers { type, level, message }
   Future<List<Map<String, dynamic>>> fetchAlerts() async {
     try {
-      final raw = await getCatAlerts(defaultCatId);
+      final catId = await getUserCatId();
+      if (catId == null) return <Map<String, dynamic>>[];
+      
+      final raw = await getCatAlerts(catId);
       return raw.map<Map<String, dynamic>>((e) {
         final m = (e as Map).cast<String, dynamic>();
         return <String, dynamic>{
@@ -344,181 +515,65 @@ class RealApiService {
   }
 
   /// Récupère les données liées à la litière pour la page dédiée.
-  /// Retour standardisé:
-  /// {
-  ///   dailyUsage: int,            // nombre d'utilisations aujourd'hui
-  ///   cleanliness: int,           // propreté en pourcentage 0-100
-  ///   events: List<String>,       // heures (HH:mm) des derniers passages
-  ///   anomalies: List<String>,    // libellés d'anomalies détectées
-  /// }
   Future<Map<String, dynamic>> fetchLitterData({String? catId}) async {
-    final String cid = catId ?? defaultCatId;
-    final headers = AuthService.instance.authHeader;
-
-    Future<Map<String, dynamic>?> tryGet(String path) async {
-      final http.Response resp =
-          await ApiClient.instance.get(path, headers: headers);
-      if (resp.statusCode == 200) {
-        final decoded = jsonDecode(resp.body);
-        if (decoded is Map<String, dynamic>) {
-          return decoded['data'] is Map<String, dynamic>
-              ? (decoded['data'] as Map<String, dynamic>)
-              : decoded;
-        }
-      }
-      return null;
+    final String? cid = catId ?? await getUserCatId();
+    if (cid == null) {
+      return <String, dynamic>{
+        'dailyUsage': 0,
+        'cleanliness': 0,
+        'events': <String>[],
+        'anomalies': <String>[],
+      };
     }
-
-    Map<String, dynamic>? raw;
-
-    raw = await tryGet('/litter/stats/$cid');
-    raw ??= await tryGet('/cats/$cid/litter/stats');
-    raw ??= await tryGet('/sensors/litter/stats/$cid');
-    raw ??= await tryGet('/cats/$cid/litter');
-
-    int daily = 0;
-    int cleanliness = 0;
-    double? litterHumidityPct; // 0..100
-    List<String> events = <String>[];
-    List<String> anomalies = <String>[];
-
-    Map<String, dynamic> toReturn() => <String, dynamic>{
-          'dailyUsage': daily,
-          'cleanliness': cleanliness.clamp(0, 100),
-          'events': events,
-          'anomalies': anomalies,
-        };
-
-    if (raw == null) return toReturn();
+    
+    final token = AuthState.instance.accessToken;
+    if (token == null || token.isEmpty) {
+      return <String, dynamic>{
+        'dailyUsage': 0,
+        'cleanliness': 0,
+        'events': <String>[],
+        'anomalies': <String>[],
+      };
+    }
 
     try {
-      // Compteurs
-      final usageCandidates = [
-        raw['dailyUsage'],
-        raw['usageToday'],
-        raw['todayCount'],
-        raw['usage_count'],
-      ];
-      for (final c in usageCandidates) {
-        if (c is num) {
-          daily = c.toInt();
-          break;
-        }
-      }
-
-      // Humidité de la litière (prioritaire pour calculer la propreté)
-      final humCandidates = [
-        raw['litterHumidity'],
-        raw['litter_humidity'],
-        raw['humidity_litter'],
-        raw['litter'] is Map ? (raw['litter'] as Map)['humidity'] : null,
-      ];
-      for (final h in humCandidates) {
-        if (h is num) {
-          litterHumidityPct = h.toDouble();
-          break;
-        }
-      }
-      // Événements (passages)
-      final ev = raw['events'] ?? raw['visits'] ?? raw['activity'];
-      if (ev is List) {
-        events = ev
-            .map((e) {
-              if (e is String) return e; // supposé ISO ou HH:mm
-              if (e is Map) {
-                final m = e.cast<String, dynamic>();
-                return m['time'] ?? m['timestamp'] ?? m['at'];
-              }
-              return null;
-            })
-            .whereType<String>()
-            .map((s) {
-              try {
-                final dt = DateTime.tryParse(s);
-                if (dt != null) {
-                  final h = dt.hour.toString().padLeft(2, '0');
-                  final m = dt.minute.toString().padLeft(2, '0');
-                  return '$h:$m';
-                }
-              } catch (_) {}
-              return s; // déjà formaté
-            })
-            .toList(growable: false);
-      }
-
-      // anomalies éventuelles
-      final an = raw['anomalies'] ?? raw['alerts'] ?? raw['warnings'];
-      if (an is List) {
-        anomalies = an
-            .map((e) {
-              if (e is String) return e;
-              if (e is Map) {
-                final m = e.cast<String, dynamic>();
-                return m['message'] ?? m['label'] ?? m['type'];
-              }
-              return null;
-            })
-            .whereType<String>()
-            .toList(growable: false);
-      }
-
-      if (litterHumidityPct == null) {
-        try {
-          // tester variante coté back end
-          final http.Response typedResp = await ApiClient.instance.get(
-            '/sensors/stats/$cid?hours=24&type=litter',
-            headers: headers,
-          );
-          if (typedResp.statusCode == 200) {
-            final typed = jsonDecode(typedResp.body);
-            if (typed is Map<String, dynamic>) {
-              final h = typed['humidity'];
-              if (h is Map && h['avg'] is num) {
-                litterHumidityPct = (h['avg'] as num).toDouble();
-              }
+      // Récupérer les données des capteurs pour ce chat
+      final response = await ApiClient.instance.get(
+        '/ruuvitags/data?catIds=$cid',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['state'] == true && data['data'] != null) {
+          final sensorData = data['data'] as List;
+          
+          // Chercher les données du capteur LITTER pour ce chat
+          for (var item in sensorData) {
+            if (item['catId'] == cid && item['type'] == 'LITTER') {
+              return <String, dynamic>{
+                'dailyUsage': item['dailyUsage'] ?? 0,
+                'cleanliness': item['cleanliness'] ?? 0,
+                'events': (item['events'] as List?)?.cast<String>() ?? <String>[],
+                'anomalies': (item['anomalies'] as List?)?.cast<String>() ?? <String>[],
+              };
             }
           }
-
-          // 2) Fallback: stats génériques (non filtrées)
-          final stats = await getSensorStats(cid, hours: 24);
-          if (stats != null) {
-            final data = stats['data'] is Map<String, dynamic>
-                ? stats['data'] as Map<String, dynamic>
-                : stats;
-            final candidates = [
-              data['litterHumidity'],
-              data['litter_humidity'],
-              data['humidity_litter'],
-              data['litter'] is Map
-                  ? (data['litter'] as Map)['humidity']
-                  : null,
-              data['litterHumidity'] is Map
-                  ? (data['litterHumidity']['avg'] ??
-                      data['litterHumidity']['value'])
-                  : null,
-              data['humidity'] is Map ? data['humidity']['avg'] : null,
-            ];
-            for (final h in candidates) {
-              if (h is num) {
-                litterHumidityPct = h.toDouble();
-                break;
-              }
-            }
-          }
-        } catch (_) {}
+        }
       }
-
-      // normalisation+ calcul propreté = 100 - humidité
-      if (litterHumidityPct != null) {
-        double h = litterHumidityPct;
-        if (h >= 0 && h <= 1) h *= 100; // ratio -> %
-        h = h.clamp(0, 100);
-        cleanliness = (100 - h).round();
-      }
-    } catch (_) {
-      // Renvoie ce qui a pu être extrait
+    } catch (e) {
+      print('Erreur lors de la récupération des données de litière: $e');
     }
 
-    return toReturn();
+    // Retourner des données vides si aucune donnée trouvée
+    return <String, dynamic>{
+      'dailyUsage': 0,
+      'cleanliness': 0,
+      'events': <String>[],
+      'anomalies': <String>[],
+    };
   }
 }

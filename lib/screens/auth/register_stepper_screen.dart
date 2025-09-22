@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../screens/scan/qr_scanner_screen.dart';
 import '../../screens/scan/sensor_type_selection_screen.dart';
+import '../../screens/scan/threshold_configuration_screen.dart'; 
 
 class RegisterStepperScreen extends StatefulWidget {
   const RegisterStepperScreen({super.key});
@@ -181,61 +182,156 @@ class _RegisterStepperScreenState extends State<RegisterStepperScreen> {
     setState(() => _isSubmitting = true);
     
     try {
-      final response = await http.post(
-        Uri.parse('http://localhost:3000/auth/register'),
+      final cs = Theme.of(context).colorScheme;
+      
+      // Étape 1: Créer l'utilisateur
+      print('Étape 1: Création de l\'utilisateur...');
+      
+      final userRequestData = {
+        'email': _email.text.trim(),
+        'username': (_firstName.text.trim() + '.' + _lastName.text.trim()).replaceAll(' ', ''),
+        'phoneNumber': _phone.text.trim(),
+        'password': _password.text,
+      };
+      
+      print('🔍 Données utilisateur à envoyer: $userRequestData');
+      print(' URL: http://localhost:3000/api/auth/register');
+      
+      final userResponse = await http.post(
+        Uri.parse('http://localhost:3000/api/auth/register'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _email.text.trim(),
-          'username': (_firstName.text.trim() + '.' + _lastName.text.trim()).replaceAll(' ', ''),
-          'phoneNumber': _phone.text.trim(),
-          'password': _password.text,
-          'cat': {
-            'name': _catName.text.trim(),
-            'breed': _catBreed.text.trim(),
-            'birthDate': _catBirthDate.text.trim(),
-            'weight': double.tryParse(_catWeight.text.trim()),
-            'color': _catColor.text.trim(),
-            'gender': _selectedGender, // Utiliser la valeur sélectionnée
-            'healthNotes': _catHealthNotes.text.trim(),
-          },
-          'ruuviTags': _ruuviTags.map((tag) => tag.toJson()).toList(),
-        }),
+        body: jsonEncode(userRequestData),
       );
 
-      final cs = Theme.of(context).colorScheme;
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final data = jsonDecode(response.body);
-        if (data['state'] == true) {
-          await AuthState.instance.signInWithApiResponse(data['data'], rawEmail: _email.text.trim());
-          if (!mounted) return;
-          context.go('/dashboard');
-        } else {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: cs.error,
-              content: Text(data['message'] ?? "Echec de l'inscription"),
-            ),
-          );
-        }
-      } else {
-        if (!mounted) return;
-        String errorMsg = "Erreur serveur (${response.statusCode})";
-        try {
-          final errBody = response.body;
-          if (errBody.isNotEmpty) {
-            errorMsg += '\n' + errBody;
-            print('Erreur API register: $errBody');
-          }
-        } catch (_) {}
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: cs.error,
-            content: Text(errorMsg),
-          ),
-        );
+      print('📡 Réponse utilisateur reçue:');
+      print('   Status Code: ${userResponse.statusCode}');
+      print('   Headers: ${userResponse.headers}');
+      print('   Body: ${userResponse.body}');
+
+      if (userResponse.statusCode < 200 || userResponse.statusCode >= 300) {
+        print('❌ Erreur HTTP utilisateur: ${userResponse.statusCode}');
+        throw Exception('Erreur création utilisateur: ${userResponse.statusCode} - ${userResponse.body}');
       }
+
+      final userData = jsonDecode(userResponse.body);
+      print('✅ Données utilisateur parsées: $userData');
+      
+      if (userData['state'] != true) {
+        print('❌ Échec création utilisateur: ${userData['message']}');
+        throw Exception('Échec création utilisateur: ${userData['message']}');
+      }
+
+      // Connexion automatique après inscription
+      await AuthState.instance.signInWithApiResponse(userData['data'], rawEmail: _email.text.trim());
+      
+      // Étape 2: Créer le chat
+      print('Étape 2: Création du chat...');
+      final userId = userData['data']['user']['id']; 
+      print('User ID récupéré: $userId');
+      print('Type de userId: ${userId.runtimeType}');
+      
+      final catRequestData = { 
+        'name': _catName.text.trim(),
+        'breed': _catBreed.text.trim(),
+        'userId': userId, 
+        'birthDate': _catBirthDate.text.trim(),
+        'weight': double.tryParse(_catWeight.text.trim()),
+        'color': _catColor.text.trim(),
+        'gender': _selectedGender,
+        'healthNotes': _catHealthNotes.text.trim(),
+      };
+      
+      print('Données du chat à envoyer: $catRequestData'); 
+      
+      final catResponse = await http.post(
+        Uri.parse('http://localhost:3000/api/cats'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+        body: jsonEncode(catRequestData), 
+      );
+
+      if (catResponse.statusCode < 200 || catResponse.statusCode >= 300) {
+        throw Exception('Erreur création chat: ${catResponse.statusCode} - ${catResponse.body}');
+      }
+
+      final catData = jsonDecode(catResponse.body);
+      if (catData['state'] != true) {
+        throw Exception('Échec création chat: ${catData['message']}');
+      }
+
+      final catId = catData['data']['id'];
+      print('Chat créé avec l\'ID: $catId');
+
+      // Étape 3: Créer les RuuviTags
+      print('Étape 3: Création des RuuviTags...');
+      for (int i = 0; i < _ruuviTags.length; i++) {
+        final tag = _ruuviTags[i];
+        print('Création du RuuviTag ${i + 1}/${_ruuviTags.length}: ${tag.id}');
+        
+        // Créer la structure avec null pour les types non utilisés
+        Map<String, dynamic> completeThresholds = {
+          'collar': null,
+          'environment': null,
+          'litter': null,
+        };
+
+        // Remplacer par les seuils du type spécifique
+        if (tag.alertThresholds != null) {
+          switch (tag.type) {
+            case RuuviTagType.collar:
+              completeThresholds['collar'] = tag.alertThresholds;
+              break;
+            case RuuviTagType.environment:
+              completeThresholds['environment'] = tag.alertThresholds;
+              break;
+            case RuuviTagType.litter:
+              completeThresholds['litter'] = tag.alertThresholds;
+              break;
+          }
+        }
+
+        print('Seuils complets à envoyer: $completeThresholds');
+
+        final ruuviTagResponse = await http.post(
+          Uri.parse('http://localhost:3000/api/ruuvitags'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+          },
+          body: jsonEncode({
+            'id': tag.id.toString(), 
+            'type': tag.type.value,
+            'catIds': [catId],
+            'alertThresholds': completeThresholds,
+          }),
+        );
+
+        if (ruuviTagResponse.statusCode < 200 || ruuviTagResponse.statusCode >= 300) {
+          throw Exception('Erreur création RuuviTag ${tag.id}: ${ruuviTagResponse.statusCode} - ${ruuviTagResponse.body}');
+        }
+
+        final ruuviTagData = jsonDecode(ruuviTagResponse.body);
+        if (ruuviTagData['state'] != true) {
+          throw Exception('Échec création RuuviTag ${tag.id}: ${ruuviTagData['message']}');
+        }
+        
+        print('RuuviTag ${tag.id} créé avec succès');
+      }
+
+      // Succès - Redirection vers le dashboard
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: cs.primary,
+          content: const Text('Inscription réussie ! Bienvenue !'),
+        ),
+      );
+      context.go('/dashboard');
+
     } catch (e) {
+      print('Erreur lors de l\'inscription: $e');
       if (!mounted) return;
       final cs = Theme.of(context).colorScheme;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -712,7 +808,7 @@ class _RegisterStepperScreenState extends State<RegisterStepperScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: Icon(_getRuuviTagIcon(tag.type)),
-        title: Text(tag.ruuviTagId),
+        title: Text(tag.id),
         subtitle: Text(tag.type.displayName),
         trailing: IconButton(
           icon: const Icon(Icons.delete, color: Colors.red),
@@ -772,13 +868,57 @@ class _RegisterStepperScreenState extends State<RegisterStepperScreen> {
     );
     
     if (typeResult != null) {
-      setState(() {
-        _ruuviTags.add(RuuviTag(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          ruuviTagId: typeResult['ruuviTagId'],
-          type: typeResult['type'],
-        ));
-      });
+      // Naviguer vers la configuration des seuils
+      await _navigateToThresholdConfiguration(
+        typeResult['ruuviTagId'],
+        typeResult['type'],
+      );
+    }
+  }
+
+  Future<void> _navigateToThresholdConfiguration(String ruuviTagId, RuuviTagType type) async {
+    try {
+      print('Navigation vers la configuration des seuils pour $ruuviTagId');
+      
+      final thresholdResult = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(
+          builder: (context) => ThresholdConfigurationScreen(
+            ruuviTagId: ruuviTagId,
+            type: type,
+            onThresholdsConfigured: (id, tagType, thresholds) {
+              print('Callback recu: $id, $tagType, $thresholds');
+              Navigator.of(context).pop({
+                'ruuviTagId': id,
+                'type': tagType,
+                'thresholds': thresholds,
+              });
+            },
+          ),
+        ),
+      );
+
+      print('Resultat recu: $thresholdResult');
+      
+      if (thresholdResult != null) {
+        print('Ajout du RuuviTag a la liste');
+        setState(() {
+          _ruuviTags.add(
+            RuuviTag(
+              id: thresholdResult['ruuviTagId'],
+              type: thresholdResult['type'],
+              alertThresholds: thresholdResult['thresholds'],
+            ),
+          );
+        });
+        print('Nombre de RuuviTags: ${_ruuviTags.length}');
+      } else {
+        print('Aucun resultat recu');
+      }
+    } catch (e) {
+      print('Erreur dans _navigateToThresholdConfiguration: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e')),
+      );
     }
   }
 
@@ -897,18 +1037,87 @@ class _RegisterStepperScreenState extends State<RegisterStepperScreen> {
                   ),
                 ),
                 Text(
-                  'ID: ${tag.ruuviTagId}',
+                  'ID: ${tag.id}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                     fontFamily: 'monospace',
                   ),
                 ),
+                if (tag.alertThresholds != null) ...[
+                  const SizedBox(height: 4),
+                  ..._buildThresholdsInfo(tag.type, tag.alertThresholds!),
+                ],
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _buildThresholdsInfo(RuuviTagType type, Map<String, dynamic> thresholds) {
+    List<Widget> thresholdWidgets = [];
+    
+    switch (type) {
+      case RuuviTagType.collar:
+        if (thresholds['inactivityHours'] != null) {
+          thresholdWidgets.add(
+            Text(
+              'Inactivité: ${thresholds['inactivityHours']}h',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.green[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+        break;
+        
+      case RuuviTagType.environment:
+        if (thresholds['temperatureMin'] != null && thresholds['temperatureMax'] != null) {
+          thresholdWidgets.add(
+            Text(
+              'Température: ${thresholds['temperatureMin']}°C - ${thresholds['temperatureMax']}°C',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.blue[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+        if (thresholds['humidityMin'] != null && thresholds['humidityMax'] != null) {
+          thresholdWidgets.add(
+            Text(
+              'Humidité: ${thresholds['humidityMin']}% - ${thresholds['humidityMax']}%',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.blue[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+        break;
+        
+      case RuuviTagType.litter:
+        if (thresholds['dailyUsageMax'] != null) {
+          thresholdWidgets.add(
+            Text(
+              'Usage max: ${thresholds['dailyUsageMax']} fois/jour',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.orange[700],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+        break;
+    }
+    
+    return thresholdWidgets;
   }
 } 

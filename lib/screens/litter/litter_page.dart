@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:abd_petcare/core/services/api_provider.dart';
 import 'package:abd_petcare/core/services/api_service.dart';
+import 'package:go_router/go_router.dart'; 
 
 class LitterPage extends StatelessWidget {
   const LitterPage({super.key});
@@ -15,6 +16,13 @@ class LitterPage extends StatelessWidget {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => context.push('/settings/litter'),
+            tooltip: 'Paramètres des seuils',
+          ),
+        ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _fetch(),
@@ -140,11 +148,7 @@ Future<Map<String, dynamic>> _fetch() async {
   if (api is RealApiService) {
     return api.fetchLitterData();
   }
-  // Mock service exposes fetchLitterData sans auth
-  final dynamic mock = api;
-  if (mock.fetchLitterData is Function) {
-    return await mock.fetchLitterData();
-  }
+  // Retourner des données vides si le service n'est pas disponible
   return const {
     'dailyUsage': 0,
     'cleanliness': 0,

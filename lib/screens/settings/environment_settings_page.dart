@@ -1,21 +1,18 @@
 // lib/screens/environnement/environment_settings_page.dart
-import 'package:abd_petcare/core/services/api_client.dart';
 import 'package:flutter/material.dart';
-
-
-
-import '../../core/services/auth_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../core/services/auth_state.dart';
+import '../../models/ruuvi_tag.dart';
 
 class EnvironmentSettingsPage extends StatefulWidget {
   const EnvironmentSettingsPage({super.key});
 
   @override
-  State<EnvironmentSettingsPage> createState() =>
-      _EnvironmentSettingsPageState();
+  State<EnvironmentSettingsPage> createState() => _EnvironmentSettingsPageState();
 }
 
 class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
-
   int tempMin = 0;
   int tempMax = 0;
   int humMin = 0;
@@ -23,7 +20,7 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
   bool notifications = true;
   bool _loading = true;
   String? _catId;
-  Map<String, dynamic>? _catThresholds;
+  String? _ruuviTagId;
 
   @override
   void initState() {
@@ -34,54 +31,153 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
   Future<void> _fetchEnvThresholds() async {
     setState(() => _loading = true);
     try {
-      final userResp = await AuthService.instance.fetchUserWithCats();
-      final cats = userResp?['extras']?['cats'] as List?;
-      if (cats == null || cats.isEmpty) {
+      // Récupérer l'ID du chat de l'utilisateur
+      final userResponse = await http.get(
+        Uri.parse('http://localhost:3000/api/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (userResponse.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des données utilisateur');
+      }
+
+      final userData = jsonDecode(userResponse.body);
+      if (userData['state'] != true || userData['extras'] == null || 
+          userData['extras']['cats'] == null || 
+          (userData['extras']['cats'] as List).isEmpty) {
         setState(() => _loading = false);
         return;
       }
-      final firstCat = cats.first;
-      final thresholds = firstCat['activityThresholds'] as Map<String, dynamic>?;
-      final env = thresholds?['environment'] as Map<String, dynamic>?;
-      setState(() {
-        tempMin = env?['temperatureMin'] ?? 0;
-        tempMax = env?['temperatureMax'] ?? 0;
-  // tempThreshold supprimé
-        humMin = env?['humidityMin'] ?? 0;
-        humMax = env?['humidityMax'] ?? 0;
-        _catId = firstCat['id'] as String?;
-        _catThresholds = thresholds;
-        _loading = false;
-      });
+
+      final firstCat = (userData['extras']['cats'] as List).first;
+      _catId = firstCat['id'] as String?;
+
+      // Récupérer les RuuviTags
+      final ruuviTagsResponse = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (ruuviTagsResponse.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des RuuviTags');
+      }
+
+      final ruuviTagsData = jsonDecode(ruuviTagsResponse.body);
+      if (ruuviTagsData['state'] == true && ruuviTagsData['data'] != null) {
+        final allTags = (ruuviTagsData['data'] as List)
+            .map((tag) => RuuviTag.fromJson(tag))
+            .toList();
+        
+        // Trouver le RuuviTag de type ENVIRONMENT pour ce chat
+        final environmentTag = allTags.firstWhere(
+          (tag) => tag.type == RuuviTagType.environment && 
+                   tag.catIds != null && 
+                   tag.catIds!.contains(_catId),
+          orElse: () => throw Exception('Aucun capteur d\'environnement trouvé'),
+        );
+
+        _ruuviTagId = environmentTag.id;
+        
+        // Récupérer les seuils d'environnement
+        final envThresholds = environmentTag.alertThresholds?['environment'] as Map<String, dynamic>?;
+        
+        setState(() {
+          tempMin = envThresholds?['temperatureMin'] ?? 15;
+          tempMax = envThresholds?['temperatureMax'] ?? 30;
+          humMin = envThresholds?['humidityMin'] ?? 30;
+          humMax = envThresholds?['humidityMax'] ?? 70;
+          _loading = false;
+        });
+      } else {
+        throw Exception('Aucun RuuviTag trouvé');
+      }
     } catch (e) {
       setState(() => _loading = false);
     }
   }
 
-  Future<void> _updateEnvThresholds({int? newTempMin, int? newTempMax, int? newHumMin, int? newHumMax}) async {
-    if (_catId == null || _catThresholds == null) return;
-    final collar = Map<String, dynamic>.from(_catThresholds!['collar'] ?? {});
-    final environment = Map<String, dynamic>.from(_catThresholds!['environment'] ?? {});
-    final litter = Map<String, dynamic>.from(_catThresholds!['litter'] ?? {});
-    if (newTempMin != null) environment['temperatureMin'] = newTempMin;
-    if (newTempMax != null) environment['temperatureMax'] = newTempMax;
-    if (newHumMin != null) environment['humidityMin'] = newHumMin;
-    if (newHumMax != null) environment['humidityMax'] = newHumMax;
-    if (litter['dailyUsageMin'] == null) litter['dailyUsageMin'] = 1;
-    final body = {
-      'collar': collar,
-      'environment': environment,
-      'litter': litter,
-    };
-    print('Updating thresholds with body: $body');
-    await ApiClient.instance.updateCatThresholds(_catId!, body, headers: AuthService.instance.authHeader);
-    setState(() {
-      _catThresholds = {
-        'collar': collar,
-        'environment': environment,
-        'litter': litter,
-      };
-    });
+  Future<void> _updateThresholds({
+    int? newTempMin,
+    int? newTempMax,
+    int? newHumMin,
+    int? newHumMax,
+  }) async {
+    if (_ruuviTagId == null) return;
+
+    try {
+      setState(() => _loading = true);
+
+      // Récupérer les seuils actuels du RuuviTag
+      final response = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Erreur lors de la récupération des seuils actuels');
+      }
+
+      final data = jsonDecode(response.body);
+      final allTags = (data['data'] as List)
+          .map((tag) => RuuviTag.fromJson(tag))
+          .toList();
+      
+      final currentTag = allTags.firstWhere(
+        (tag) => tag.id == _ruuviTagId,
+      );
+
+      // Mettre à jour les seuils d'environnement
+      final updatedThresholds = Map<String, dynamic>.from(currentTag.alertThresholds ?? {});
+      if (updatedThresholds['environment'] == null) {
+        updatedThresholds['environment'] = {};
+      }
+      
+      if (newTempMin != null) updatedThresholds['environment']['temperatureMin'] = newTempMin;
+      if (newTempMax != null) updatedThresholds['environment']['temperatureMax'] = newTempMax;
+      if (newHumMin != null) updatedThresholds['environment']['humidityMin'] = newHumMin;
+      if (newHumMax != null) updatedThresholds['environment']['humidityMax'] = newHumMax;
+
+      // Envoyer la mise à jour
+      final updateResponse = await http.patch(
+        Uri.parse('http://localhost:3000/api/ruuvitags/$_ruuviTagId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${AuthState.instance.accessToken}',
+        },
+        body: jsonEncode({
+          'alertThresholds': updatedThresholds,
+        }),
+      );
+
+      if (updateResponse.statusCode == 200) {
+        setState(() {
+          if (newTempMin != null) tempMin = newTempMin;
+          if (newTempMax != null) tempMax = newTempMax;
+          if (newHumMin != null) humMin = newHumMin;
+          if (newHumMax != null) humMax = newHumMax;
+          _loading = false;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Seuils mis à jour avec succès')),
+          );
+        }
+      } else {
+        throw Exception('Erreur lors de la mise à jour: ${updateResponse.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+    }
   }
 
   // Suppression de la sauvegarde locale, tout est initialisé via l'API
@@ -89,43 +185,43 @@ class _EnvironmentSettingsPageState extends State<EnvironmentSettingsPage> {
   void incMin() {
     final newValue = (tempMin + 1).clamp(-50, tempMax);
     setState(() => tempMin = newValue);
-    _updateEnvThresholds(newTempMin: newValue);
+    _updateThresholds(newTempMin: newValue);
   }
   void decMin() {
     final newValue = (tempMin - 1).clamp(-50, tempMax);
     setState(() => tempMin = newValue);
-    _updateEnvThresholds(newTempMin: newValue);
+    _updateThresholds(newTempMin: newValue);
   }
   void incMax() {
     final newValue = (tempMax + 1).clamp(tempMin, 100);
     setState(() => tempMax = newValue);
-    _updateEnvThresholds(newTempMax: newValue);
+    _updateThresholds(newTempMax: newValue);
   }
   void decMax() {
     final newValue = (tempMax - 1).clamp(tempMin, 100);
     setState(() => tempMax = newValue);
-    _updateEnvThresholds(newTempMax: newValue);
+    _updateThresholds(newTempMax: newValue);
   }
   // incThresh/decThresh supprimés
   void incHumMin() {
     final newValue = (humMin + 1).clamp(0, humMax);
     setState(() => humMin = newValue);
-    _updateEnvThresholds(newHumMin: newValue);
+    _updateThresholds(newHumMin: newValue);
   }
   void decHumMin() {
     final newValue = (humMin - 1).clamp(0, humMax);
     setState(() => humMin = newValue);
-    _updateEnvThresholds(newHumMin: newValue);
+    _updateThresholds(newHumMin: newValue);
   }
   void incHumMax() {
     final newValue = (humMax + 1).clamp(humMin, 100);
     setState(() => humMax = newValue);
-    _updateEnvThresholds(newHumMax: newValue);
+    _updateThresholds(newHumMax: newValue);
   }
   void decHumMax() {
     final newValue = (humMax - 1).clamp(humMin, 100);
     setState(() => humMax = newValue);
-    _updateEnvThresholds(newHumMax: newValue);
+    _updateThresholds(newHumMax: newValue);
   }
 
   @override

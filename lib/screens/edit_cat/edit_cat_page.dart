@@ -132,7 +132,7 @@ class _EditCatPageState extends State<EditCatPage> {
     final token = AuthState.instance.refreshToken;
     http
         .put(
-          Uri.parse('http://localhost:3000/cats/$catId'),
+          Uri.parse('http://localhost:3000/api/cats/$catId'),
           headers: {
             'Content-Type': 'application/json',
             if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',

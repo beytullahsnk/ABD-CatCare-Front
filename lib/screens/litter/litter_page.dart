@@ -60,7 +60,7 @@ class LitterPage extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _InfoCard(
-                        title: "Propreté",
+                        title: "Humidité", 
                         value: "$cleanliness%",
                       ),
                     ),

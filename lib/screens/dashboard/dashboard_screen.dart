@@ -58,7 +58,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _sensorAlerts = [];
           });
         }
-        print('Sensor alerts: $_sensorAlerts');
       } else {
         print('Erreur API /sensors/alerts/$catId: ${response.statusCode} - ${response.body}');
       }
@@ -105,9 +104,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _sensorData = data;
     });
-    if (data != null) {
-      print('Sensor data: $data');
-    }
   }
   late Future<Map<String, dynamic>> _futureMetrics;
   final _api = ApiProvider.instance.get();
@@ -264,14 +260,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SectionHeader('Dernière activité'),
                     MetricTile(
-                      title: 'Dort',
-                      subtitle: _firstCat != null &&
+                      title: lastSeen.isNotEmpty ? 'En activité' : 'Dort',
+                      subtitle: lastSeen.isNotEmpty 
+                          ? lastSeen 
+                          : (_firstCat != null &&
                               _firstCat!['activityThresholds'] != null &&
                               _firstCat!['activityThresholds']['collar'] != null &&
                               _firstCat!['activityThresholds']['collar']['inactivityHours'] != null
                           ? 'Dort depuis ${_firstCat!['activityThresholds']['collar']['inactivityHours']} heures'
-                          : 'Aucune donnée d\'activité disponible',
-                      leadingIcon: Icons.bedtime,
+                          : 'Aucune donnée d\'activité disponible'),
+                      leadingIcon: lastSeen.isNotEmpty ? Icons.pets : Icons.bedtime,
                       trailingThumb: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: Image.asset(
@@ -417,14 +415,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               : Icons.info_outline,
                         ),
                       ),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Dernière activité'),
-                      subtitle: Text(
-                        lastSeen.isEmpty ? '—' : lastSeen.substring(11, 16),
-                      ),
-                    ),
                   ],
                 );
               },

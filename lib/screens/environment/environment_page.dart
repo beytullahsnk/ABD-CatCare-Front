@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../core/services/auth_state.dart';
 import 'package:go_router/go_router.dart'; 
+import '../../models/ruuvi_tag.dart'; 
 
 class EnvironmentPage extends StatefulWidget {
   const EnvironmentPage({super.key});
@@ -37,8 +38,13 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
       final historicalData = await _fetchHistoricalData(catId);
       
       setState(() {
-        _temperature = data != null && data['temperature'] != null ? (data['temperature'] as num).toDouble() : null;
-        _humidity = data != null && data['humidity'] != null ? (data['humidity'] as num).toInt() : null;
+        final envData = data?['environment'];
+        _temperature = envData != null && envData['temperature'] != null 
+            ? double.tryParse(envData['temperature'].toString()) 
+            : null;
+        _humidity = envData != null && envData['humidity'] != null 
+            ? double.tryParse(envData['humidity'].toString())?.round() 
+            : null;
         _historicalData = historicalData;
         _loading = false;
       });
@@ -54,9 +60,33 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
       final token = AuthState.instance.accessToken;
       if (token == null || token.isEmpty) return [];
 
+      // D'abord, récupérer les RuuviTags pour faire le mapping
+      final ruuviTagsResp = await http.get(
+        Uri.parse('http://localhost:3000/api/ruuvitags'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      Map<String, String> ruuviTagToType = {};
+      if (ruuviTagsResp.statusCode == 200) {
+        final ruuviTagsData = jsonDecode(ruuviTagsResp.body);
+        if (ruuviTagsData['state'] == true && ruuviTagsData['data'] != null) {
+          final ruuviTags = (ruuviTagsData['data'] as List)
+              .map((tag) => RuuviTag.fromJson(tag))
+              .where((tag) => tag.catIds != null && tag.catIds!.contains(catId))
+              .toList();
+          
+          for (final tag in ruuviTags) {
+            ruuviTagToType[tag.id] = tag.type.value;
+          }
+        }
+      }
+
       // Récupérer les données d'historique depuis l'API
       final response = await http.get(
-        Uri.parse('http://localhost:3000/api/ruuvitags/data?catIds=$catId&hours=24'),
+        Uri.parse('http://localhost:3000/api/ruuvitags/data'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -66,11 +96,16 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['state'] == true && data['data'] != null) {
-          final sensorData = data['data'] as List;
+          final sensorData = data['data']['items'] as List;
           
           // Filtrer les données d'environnement et les trier par timestamp
           final envData = sensorData
-              .where((item) => item['catId'] == catId && item['type'] == 'ENVIRONMENT')
+              .where((item) {
+                final ruuviTagId = item['ruuvitagId'] as String?;
+                return ruuviTagId != null && 
+                       ruuviTagToType.containsKey(ruuviTagId) && 
+                       ruuviTagToType[ruuviTagId] == 'ENVIRONMENT';
+              })
               .cast<Map<String, dynamic>>()
               .toList();
           
@@ -97,9 +132,9 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
     final spots = <FlSpot>[];
     for (int i = 0; i < _historicalData.length && i < 7; i++) {
       final data = _historicalData[i];
-      final temp = data['temperature'] as num?;
+      final temp = double.tryParse(data['temperature']?.toString() ?? '');
       if (temp != null) {
-        spots.add(FlSpot(i.toDouble(), temp.toDouble()));
+        spots.add(FlSpot(i.toDouble(), temp));
       }
     }
     return spots;
@@ -111,9 +146,9 @@ class _EnvironmentPageState extends State<EnvironmentPage> {
     final spots = <FlSpot>[];
     for (int i = 0; i < _historicalData.length && i < 7; i++) {
       final data = _historicalData[i];
-      final humidity = data['humidity'] as num?;
+      final humidity = double.tryParse(data['humidity']?.toString() ?? '');
       if (humidity != null) {
-        spots.add(FlSpot(i.toDouble(), humidity.toDouble()));
+        spots.add(FlSpot(i.toDouble(), humidity));
       }
     }
     return spots;

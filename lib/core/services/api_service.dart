@@ -2,32 +2,111 @@ import 'dart:convert';
 import 'package:abd_petcare/core/services/auth_service.dart';
 import 'package:abd_petcare/core/services/auth_state.dart';
 import 'package:abd_petcare/models/notification_prefs.dart';
+import 'package:abd_petcare/models/ruuvi_tag.dart';
 import 'package:http/http.dart' as http;
 import 'api_client.dart';
-
-Future<Map<String, dynamic>?> fetchLatestSensorData(String catId) async {
-  try {
-    final resp = await ApiClient.instance.get(
-      '/sensors/latest/$catId',
-      headers: AuthService.instance.authHeader,
-    );
-    if (resp.statusCode >= 200 && resp.statusCode < 300) {
-      final data = jsonDecode(resp.body);
-      if (data is Map && data['data'] is Map<String, dynamic>) {
-        return data['data'] as Map<String, dynamic>;
-      }
-    } else {
-      print('Erreur API /sensors/latest/$catId: ${resp.statusCode} - ${resp.body}');
-    }
-  } catch (e) {
-    print('Erreur réseau /sensors/latest/$catId: $e');
-  }
-  return null;
-}
 
 class RealApiService {
   RealApiService._();
   static final RealApiService instance = RealApiService._();
+
+  Future<Map<String, String>> _getHeaders() async {
+    final token = AuthState.instance.accessToken;
+    if (token == null || token.isEmpty) {
+      throw Exception('Token d\'authentification manquant');
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<Map<String, dynamic>?> fetchLatestSensorData(String catId) async {
+    try {
+      // Utiliser la même logique que fetchDashboardData mais retourner seulement les données brutes
+      final token = AuthState.instance.accessToken;
+      if (token == null || token.isEmpty) {
+        return null;
+      }
+
+      // Récupérer les RuuviTags de l'utilisateur pour faire le mapping
+      final ruuviTagsResp = await ApiClient.instance.get(
+        '/ruuvitags',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      Map<String, String> ruuviTagToType = {};
+      if (ruuviTagsResp.statusCode == 200) {
+        final ruuviTagsData = jsonDecode(ruuviTagsResp.body);
+        if (ruuviTagsData['state'] == true && ruuviTagsData['data'] != null) {
+          final ruuviTags = (ruuviTagsData['data'] as List)
+              .map((tag) => RuuviTag.fromJson(tag))
+              .where((tag) => tag.catIds != null && tag.catIds!.contains(catId))
+              .toList();
+          
+          for (final tag in ruuviTags) {
+            ruuviTagToType[tag.id] = tag.type.value;
+          }
+        }
+      }
+
+      // Récupérer les données des capteurs
+      final resp = await ApiClient.instance.get(
+        '/ruuvitags/data',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        if (data['state'] == true && data['data'] != null) {
+          final sensorData = data['data']['items'] as List<dynamic>? ?? [];
+          
+          // Filtrer et trier les données
+          final validData = sensorData.where((item) => item['timestamp'] != null).toList();
+          validData.sort((a, b) {
+            try {
+              final timestampA = a['timestamp'] as String;
+              final timestampB = b['timestamp'] as String;
+              return DateTime.parse(timestampB).compareTo(DateTime.parse(timestampA));
+            } catch (e) {
+              return 0;
+            }
+          });
+          
+          // Organiser les données par type et prendre seulement la première (plus récente) de chaque type
+          Map<String, dynamic> latestByType = {};
+          
+          for (var item in validData) {
+            final ruuviTagId = item['ruuvitagId'] as String?;
+            if (ruuviTagId != null && ruuviTagToType.containsKey(ruuviTagId)) {
+              final type = ruuviTagToType[ruuviTagId];
+              
+              // Si on n'a pas encore de donnée pour ce type, la prendre (c'est la plus récente)
+              if (type != null && !latestByType.containsKey(type)) {
+                latestByType[type] = item;
+              }
+            }
+          }
+          
+          // Retourner les données organisées par type
+          return {
+            'environment': latestByType['ENVIRONMENT'],
+            'litter': latestByType['LITTER'],
+            'collar': latestByType['COLLAR'],
+          };
+        }
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération des données capteurs: $e');
+    }
+    return null;
+  }
 
   Future<String?> getUserCatId() async {
     try {
@@ -66,13 +145,13 @@ class RealApiService {
   Future<Map<String, dynamic>> fetchDashboardData() async {
     try {
       // Récupérer l'ID du chat de l'utilisateur connecté
-      final catId = await getUserCatId(); // Utiliser la méthode publique
+      final catId = await getUserCatId();
       if (catId == null) {
         return <String, dynamic>{
           'temperature': 0.0,
           'humidity': 0,
           'litterHumidity': 0,
-          'lastSeen': '', // Chaîne vide au lieu de DateTime.now()
+          'lastSeen': '',
         };
       }
 
@@ -82,13 +161,37 @@ class RealApiService {
           'temperature': 0.0,
           'humidity': 0,
           'litterHumidity': 0,
-          'lastSeen': '', // Chaîne vide au lieu de DateTime.now()
+          'lastSeen': '',
         };
       }
 
-      // Récupérer les données des capteurs pour ce chat
+      // D'abord, récupérer les RuuviTags de l'utilisateur pour faire le mapping
+      final ruuviTagsResp = await ApiClient.instance.get(
+        '/ruuvitags',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      Map<String, String> ruuviTagToType = {};
+      if (ruuviTagsResp.statusCode == 200) {
+        final ruuviTagsData = jsonDecode(ruuviTagsResp.body);
+        if (ruuviTagsData['state'] == true && ruuviTagsData['data'] != null) {
+          final ruuviTags = (ruuviTagsData['data'] as List)
+              .map((tag) => RuuviTag.fromJson(tag))
+              .where((tag) => tag.catIds != null && tag.catIds!.contains(catId))
+              .toList();
+          
+          for (final tag in ruuviTags) {
+            ruuviTagToType[tag.id] = tag.type.value;
+          }
+        }
+      }
+
+      // Maintenant, récupérer les données des capteurs
       final resp = await ApiClient.instance.get(
-        '/ruuvitags/data?catIds=$catId',
+        '/ruuvitags/data',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -98,44 +201,137 @@ class RealApiService {
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
         if (data['state'] == true && data['data'] != null) {
-          final sensorData = data['data'] as List<dynamic>;
+          // Adapter à la nouvelle structure: data.items au lieu de data directement
+          final sensorData = data['data']['items'] as List<dynamic>? ?? [];
           
-          double temperature = 0.0;
-          int humidity = 0;
-          int litterHumidity = 0;
-          String lastSeen = DateTime.now().toIso8601String();
+          // Filtrer les données qui ont un timestamp valide et les trier
+          final validData = sensorData.where((item) => item['timestamp'] != null).toList();
+          validData.sort((a, b) {
+            try {
+              final timestampA = a['timestamp'] as String;
+              final timestampB = b['timestamp'] as String;
+              return DateTime.parse(timestampB).compareTo(DateTime.parse(timestampA));
+            } catch (e) {
+              return 0;
+            }
+          });
           
-          // Parcourir les données pour extraire les valeurs par type de capteur
-          for (var item in sensorData) {
-            if (item['catId'] == catId) {
-              switch (item['type']) {
-                case 'ENVIRONMENT':
-                  if (item['temperature'] != null) {
-                    temperature = (item['temperature'] as num).toDouble();
-                  }
-                  if (item['humidity'] != null) {
-                    humidity = (item['humidity'] as num).toInt();
-                  }
-                  break;
-                case 'LITTER':
-                  if (item['humidity'] != null) {
-                    litterHumidity = (item['humidity'] as num).toInt();
-                  }
-                  break;
-              }
+          // Organiser les données par type et prendre seulement la première (plus récente) de chaque type
+          Map<String, dynamic> latestByType = {};
+          
+          for (var item in validData) {
+            final ruuviTagId = item['ruuvitagId'] as String?;
+            if (ruuviTagId != null && ruuviTagToType.containsKey(ruuviTagId)) {
+              final type = ruuviTagToType[ruuviTagId];
               
-              // Garder la timestamp la plus récente
-              if (item['timestamp'] != null) {
-                lastSeen = item['timestamp'];
+              // Si on n'a pas encore de donnée pour ce type, la prendre (c'est la plus récente)
+              if (type != null && !latestByType.containsKey(type)) {
+                latestByType[type] = item;
               }
             }
           }
+          
+          // Extraire les valeurs des données les plus récentes
+          double temperature = 0.0;
+          int humidity = 0;
+          int litterHumidity = 0;
+          String lastSeen = '';
+          
+          // Données d'environnement les plus récentes
+          if (latestByType.containsKey('ENVIRONMENT')) {
+            final envData = latestByType['ENVIRONMENT'];
+            if (envData['temperature'] != null) {
+              temperature = double.tryParse(envData['temperature'].toString()) ?? 0.0;
+            }
+            if (envData['humidity'] != null) {
+              humidity = double.tryParse(envData['humidity'].toString())?.round() ?? 0;
+            }
+                         final envTimestamp = envData['timestamp'] as String?;
+            if (envTimestamp != null) {
+              lastSeen = envTimestamp;
+            }
+          }
+          
+          // Données de litière les plus récentes
+          if (latestByType.containsKey('LITTER')) {
+            final litterData = latestByType['LITTER'];
+            if (litterData['humidity'] != null) {
+              litterHumidity = double.tryParse(litterData['humidity'].toString())?.round() ?? 0;
+            }
+            final litterTimestamp = litterData['timestamp'] as String?;
+            if (litterTimestamp != null && 
+                (lastSeen.isEmpty || DateTime.parse(litterTimestamp).isAfter(DateTime.parse(lastSeen)))) {
+              lastSeen = litterTimestamp;
+            }
+          }
+          
+          // Traitement spécifique du collier pour calculer la dernière activité
+          String lastMovementTime = '';
+          if (latestByType.containsKey('COLLAR')) {
+            // Rechercher dans toutes les données du collier pour trouver la dernière activité
+            String? collarRuuviTagId;
+            for (final entry in ruuviTagToType.entries) {
+              if (entry.value == 'COLLAR') {
+                collarRuuviTagId = entry.key;
+                break;
+              }
+            }
+            
+            if (collarRuuviTagId != null) {
+              // Parcourir toutes les données du collier pour trouver la dernière avec mouvement
+              for (var item in validData) {
+                if (item['ruuvitagId'] == collarRuuviTagId) {
+                  try {
+                    final movementValue = item['movement'];
+                    final movement = movementValue != null ? double.tryParse(movementValue.toString()) ?? 0.0 : 0.0;
+                    final timestamp = item['timestamp'] as String?;
+                    
+                    if (movement > 0 && timestamp != null) {
+                      lastMovementTime = timestamp;
+                      break; // Prendre la première (plus récente) avec mouvement
+                    }
+                  } catch (e) {
+                    continue;
+                  }
+                }
+              }
+            }
+          }
+
+          // Calculer le temps écoulé depuis la dernière activité
+          String formattedLastSeen = '';
+          if (lastMovementTime.isNotEmpty) {
+            try {
+              final lastActivity = DateTime.parse(lastMovementTime);
+              final now = DateTime.now();
+              final difference = now.difference(lastActivity);
+              
+              if (difference.inMinutes < 60) {
+                formattedLastSeen = 'en activité il y a ${difference.inMinutes}min';
+              } else if (difference.inHours < 3) {
+                // Afficher heures et minutes pour plus de précision
+                final hours = difference.inHours;
+                final minutes = difference.inMinutes % 60;
+                formattedLastSeen = 'en activité il y a ${hours}h${minutes}min';
+              } else if (difference.inHours < 24) {
+                formattedLastSeen = 'en activité il y a ${difference.inHours}h';
+              } else {
+                formattedLastSeen = 'en activité il y a ${difference.inDays}j';
+              }
+            } catch (e) {
+              formattedLastSeen = 'Aucune activité récente';
+            }
+          } else {
+            formattedLastSeen = 'Aucune activité détectée';
+          }
+
+          lastSeen = formattedLastSeen;
           
           return <String, dynamic>{
             'temperature': temperature,
             'humidity': humidity,
             'litterHumidity': litterHumidity,
-            'lastSeen': lastSeen,
+            'lastSeen': lastSeen.isEmpty ? '—' : lastSeen,
           };
         }
       }
@@ -148,7 +344,7 @@ class RealApiService {
       'temperature': 0.0,
       'humidity': 0,
       'litterHumidity': 0,
-      'lastSeen': '', // Chaîne vide au lieu de DateTime.now()
+      'lastSeen': '',
     };
   }
 
@@ -180,19 +376,43 @@ class RealApiService {
         };
       }
 
-      // Récupérer les données des capteurs pour ce chat
-      final resp = await ApiClient.instance.get(
-        '/ruuvitags/data?catIds=$catId',
+      // D'abord, récupérer les RuuviTags de l'utilisateur pour faire le mapping
+      final ruuviTagsResp = await ApiClient.instance.get(
+        '/ruuvitags',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
+
+      Map<String, String> ruuviTagToType = {};
+      if (ruuviTagsResp.statusCode == 200) {
+        final ruuviTagsData = jsonDecode(ruuviTagsResp.body);
+        if (ruuviTagsData['state'] == true && ruuviTagsData['data'] != null) {
+          final ruuviTags = (ruuviTagsData['data'] as List)
+              .map((tag) => RuuviTag.fromJson(tag))
+              .where((tag) => tag.catIds != null && tag.catIds!.contains(catId))
+              .toList();
+          
+          for (final tag in ruuviTags) {
+            ruuviTagToType[tag.id] = tag.type.value;
+          }
+        }
+      }
+
+      // Récupérer les données des capteurs
+    final resp = await ApiClient.instance.get(
+        '/ruuvitags/data',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+    );
       
-      if (resp.statusCode == 200) {
+    if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
         if (data['state'] == true && data['data'] != null) {
-          final sensorData = data['data'] as List<dynamic>;
+          final sensorData = data['data']['items'] as List<dynamic>? ?? [];
           
           // Calculer les moyennes par type de capteur
           double tempSum = 0;
@@ -201,24 +421,27 @@ class RealApiService {
           int tempCount = 0;
           int humidityCount = 0;
           int litterCount = 0;
-          String lastSeen = DateTime.now().toIso8601String();
+          String lastSeen = '';
           
           for (var item in sensorData) {
-            if (item['catId'] == catId) {
-              switch (item['type']) {
+            final ruuviTagId = item['ruuvitagId'] as String?;
+            if (ruuviTagId != null && ruuviTagToType.containsKey(ruuviTagId)) {
+              final type = ruuviTagToType[ruuviTagId];
+              
+              switch (type) {
                 case 'ENVIRONMENT':
                   if (item['temperature'] != null) {
-                    tempSum += (item['temperature'] as num).toDouble();
+                    tempSum += double.tryParse(item['temperature'].toString()) ?? 0.0;
                     tempCount++;
                   }
                   if (item['humidity'] != null) {
-                    humiditySum += (item['humidity'] as num).toDouble();
+                    humiditySum += double.tryParse(item['humidity'].toString()) ?? 0.0;
                     humidityCount++;
                   }
                   break;
                 case 'LITTER':
                   if (item['humidity'] != null) {
-                    litterHumiditySum += (item['humidity'] as num).toDouble();
+                    litterHumiditySum += double.tryParse(item['humidity'].toString()) ?? 0.0;
                     litterCount++;
                   }
                   break;
@@ -248,7 +471,7 @@ class RealApiService {
             },
             'lastSeen': lastSeen,
           };
-        }
+    }
       }
     } catch (e) {
       print('Erreur lors de la récupération des données capteurs: $e');
@@ -520,7 +743,7 @@ class RealApiService {
         'anomalies': <String>[],
       };
     }
-    
+
     final token = AuthState.instance.accessToken;
     if (token == null || token.isEmpty) {
       return <String, dynamic>{
@@ -528,31 +751,107 @@ class RealApiService {
         'cleanliness': 0,
         'events': <String>[],
         'anomalies': <String>[],
-      };
+        };
     }
 
     try {
-      // Récupérer les données des capteurs pour ce chat
-      final response = await ApiClient.instance.get(
-        '/ruuvitags/data?catIds=$cid',
+      // D'abord, récupérer les RuuviTags de l'utilisateur pour faire le mapping
+      final ruuviTagsResp = await ApiClient.instance.get(
+        '/ruuvitags',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
+
+      Set<String> litterRuuviTags = {};
+      if (ruuviTagsResp.statusCode == 200) {
+        final ruuviTagsData = jsonDecode(ruuviTagsResp.body);
+        if (ruuviTagsData['state'] == true && ruuviTagsData['data'] != null) {
+          final allRuuviTags = (ruuviTagsData['data'] as List)
+              .map((tag) => RuuviTag.fromJson(tag))
+              .where((tag) => tag.catIds != null && tag.catIds!.contains(cid))
+              .toList();
+          
+          final ruuviTags = allRuuviTags.where((tag) => tag.type == RuuviTagType.litter).toList();
+          
+          for (final tag in ruuviTags) {
+            litterRuuviTags.add(tag.id);
+          }
+        }
+      }
+      
+      // Récupérer les données des capteurs
+      final response = await ApiClient.instance.get(
+        '/ruuvitags/data',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+          );
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['state'] == true && data['data'] != null) {
-          final sensorData = data['data'] as List;
+          final sensorData = data['data']['items'] as List? ?? [];
+          
+          // Filtrer et trier les données par timestamp (comme dans fetchDashboardData)
+          final validData = sensorData.where((item) => item['timestamp'] != null).toList();
+          validData.sort((a, b) {
+            try {
+              final timestampA = a['timestamp'] as String;
+              final timestampB = b['timestamp'] as String;
+              return DateTime.parse(timestampB).compareTo(DateTime.parse(timestampA));
+            } catch (e) {
+              return 0;
+            }
+          });
           
           // Chercher les données du capteur LITTER pour ce chat
-          for (var item in sensorData) {
-            if (item['catId'] == cid && item['type'] == 'LITTER') {
+          for (var item in validData) {
+            final ruuviTagId = item['ruuvitagId'] as String?;
+            if (ruuviTagId != null && litterRuuviTags.contains(ruuviTagId)) {
+              // Afficher l'humidité directement
+              final humidity = double.tryParse(item['humidity']?.toString() ?? '0') ?? 0.0;
+              
+              // Compter les passages dans les dernières 24h
+              final now = DateTime.now();
+              final todayStart = DateTime(now.year, now.month, now.day);
+              int dailyUsage = 0;
+              List<String> events = [];
+              
+              // Parcourir toutes les données du capteur LITTER pour compter les passages
+              for (var litterItem in validData) {
+                if (litterItem['ruuvitagId'] == ruuviTagId) {
+                  final timestamp = litterItem['timestamp'] as String?;
+                  if (timestamp != null) {
+                    try {
+                      final itemTime = DateTime.parse(timestamp);
+                      // Si c'est aujourd'hui
+                      if (itemTime.isAfter(todayStart)) {
+                        final movement = double.tryParse(litterItem['movement']?.toString() ?? '0') ?? 0.0;
+                        // Seuil de mouvement pour détecter un passage (à ajuster selon vos besoins)
+                        if (movement > 0.5) {
+                          dailyUsage++;
+                          // Formater l'heure pour le journal
+                          final timeStr = '${itemTime.hour.toString().padLeft(2, '0')}:${itemTime.minute.toString().padLeft(2, '0')}';
+                          events.add(timeStr);
+                        }
+                      }
+                    } catch (e) {
+                      continue;
+                    }
+                  }
+                }
+              }
+              
+              // Limiter à 10 événements les plus récents
+              events = events.take(10).toList();
+
               return <String, dynamic>{
-                'dailyUsage': item['dailyUsage'] ?? 0,
-                'cleanliness': item['cleanliness'] ?? 0,
-                'events': (item['events'] as List?)?.cast<String>() ?? <String>[],
+                'dailyUsage': dailyUsage,
+                'cleanliness': humidity.round(),
+                'events': events,
                 'anomalies': (item['anomalies'] as List?)?.cast<String>() ?? <String>[],
               };
             }
@@ -570,5 +869,118 @@ class RealApiService {
       'events': <String>[],
       'anomalies': <String>[],
     };
+  }
+
+  Future<List<Map<String, dynamic>>?> getActivityHistory(String catId, {int limit = 10}) async {
+    try {
+      // Récupérer d'abord les RuuviTags pour identifier l'ID du COLLAR
+      final ruuviTagsResponse = await http.get(
+        Uri.parse('${ApiClient.instance.baseUrl}/ruuvitags'),
+        headers: await _getHeaders(),
+      );
+      
+      if (ruuviTagsResponse.statusCode != 200) {
+        return null;
+      }
+      
+      final ruuviTagsData = jsonDecode(ruuviTagsResponse.body);
+      final ruuviTags = ruuviTagsData['data'] as List<dynamic>? ?? [];
+      
+      // Trouver l'ID du RuuviTag COLLAR
+      String? collarRuuviTagId;
+      for (final tag in ruuviTags) {
+        final tagData = tag as Map<String, dynamic>;
+        final tagId = tagData['id']?.toString();
+        final tagType = tagData['type'] as String?;
+        if (tagId != null && tagType == 'COLLAR') {
+          collarRuuviTagId = tagId;
+          break;
+        }
+      }
+      
+      if (collarRuuviTagId == null) {
+        return [];
+      }
+      
+      // Essayer plusieurs appels avec des paramètres différents
+      List<Map<String, dynamic>> allCollarData = [];
+      
+      // Appel 1 : Sans paramètres
+      var response1 = await http.get(
+        Uri.parse('${ApiClient.instance.baseUrl}/ruuvitags/data'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response1.statusCode == 200) {
+        final data1 = jsonDecode(response1.body);
+        final items1 = data1['data']['items'] as List<dynamic>? ?? [];
+        
+        final collarData1 = items1
+            .where((item) => item['ruuvitagId'] == collarRuuviTagId)
+            .cast<Map<String, dynamic>>()
+            .toList();
+        
+        allCollarData.addAll(collarData1);
+      }
+      
+      // Appel 2 : Avec un paramètre limit plus grand
+      var response2 = await http.get(
+        Uri.parse('${ApiClient.instance.baseUrl}/ruuvitags/data?limit=50'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response2.statusCode == 200) {
+        final data2 = jsonDecode(response2.body);
+        final items2 = data2['data']['items'] as List<dynamic>? ?? [];
+        
+        final collarData2 = items2
+            .where((item) => item['ruuvitagId'] == collarRuuviTagId)
+            .cast<Map<String, dynamic>>()
+            .toList();
+        
+        allCollarData.addAll(collarData2);
+      }
+      
+      // Appel 3 : Avec un paramètre offset
+      var response3 = await http.get(
+        Uri.parse('${ApiClient.instance.baseUrl}/ruuvitags/data?offset=10'),
+        headers: await _getHeaders(),
+      );
+      
+      if (response3.statusCode == 200) {
+        final data3 = jsonDecode(response3.body);
+        final items3 = data3['data']['items'] as List<dynamic>? ?? [];
+        
+        final collarData3 = items3
+            .where((item) => item['ruuvitagId'] == collarRuuviTagId)
+            .cast<Map<String, dynamic>>()
+            .toList();
+        
+        allCollarData.addAll(collarData3);
+      }
+      
+      // Supprimer les doublons basés sur le timestamp
+      final uniqueData = <String, Map<String, dynamic>>{};
+      for (final item in allCollarData) {
+        final timestamp = item['timestamp'] as String?;
+        if (timestamp != null) {
+          uniqueData[timestamp] = item;
+        }
+      }
+      
+      final finalData = uniqueData.values.toList();
+      
+      // Trier par timestamp décroissant et limiter
+      finalData.sort((a, b) {
+        final timestampA = a['timestamp'] as String? ?? '';
+        final timestampB = b['timestamp'] as String? ?? '';
+        return timestampB.compareTo(timestampA);
+      });
+      
+      return finalData.take(limit).toList();
+    } catch (e) {
+      print('Erreur lors de la récupération de l\'historique d\'activité: $e');
+      return null;
+    }
   }
 }

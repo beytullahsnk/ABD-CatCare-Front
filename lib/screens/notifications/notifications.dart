@@ -42,6 +42,149 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  Future<void> _generateTestAlerts() async {
+    try {
+      final cs = Theme.of(context).colorScheme;
+      
+      // Générer plusieurs alertes de test (mockées localement)
+      final testAlerts = [
+        {
+          'id': 'test_alert_1_${DateTime.now().millisecondsSinceEpoch}',
+          'title': '🚨 Température élevée détectée',
+          'message': 'La température de l\'environnement a dépassé 28°C. Vérifiez la ventilation.',
+          'category': 'environment',
+          'type': 'TEMPERATURE',
+          'severity': 'warning',
+          'createdAt': DateTime.now().toIso8601String(),
+          'readAt': null,
+          'data': {
+            'actionUrl': '/environment',
+            'temperature': 29.5,
+            'threshold': 28.0,
+          }
+        },
+        {
+          'id': 'test_alert_2_${DateTime.now().millisecondsSinceEpoch}',
+          'title': '💧 Humidité de la litière élevée',
+          'message': 'L\'humidité du bac à litière atteint 85%. Nettoyage recommandé.',
+          'category': 'litter',
+          'type': 'LITTER',
+          'severity': 'info',
+          'createdAt': DateTime.now().subtract(const Duration(minutes: 5)).toIso8601String(),
+          'readAt': null,
+          'data': {
+            'actionUrl': '/litter',
+            'humidity': 85,
+            'threshold': 80,
+          }
+        },
+        {
+          'id': 'test_alert_3_${DateTime.now().millisecondsSinceEpoch}',
+          'title': '😴 Chat inactif depuis 5h30',
+          'message': 'Aucun mouvement détecté depuis 5h30. Vérifiez que tout va bien.',
+          'category': 'activity',
+          'type': 'INACTIVITY',
+          'severity': 'warning',
+          'createdAt': DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String(),
+          'readAt': null,
+          'data': {
+            'actionUrl': '/activity',
+            'inactivityHours': 5.5,
+            'threshold': 5.0,
+          }
+        },
+        {
+          'id': 'test_alert_4_${DateTime.now().millisecondsSinceEpoch}',
+          'title': '🌡️ Température corporelle anormale',
+          'message': 'La température corporelle du chat est de 40.2°C. Consultation vétérinaire recommandée.',
+          'category': 'activity',
+          'type': 'TEMPERATURE',
+          'severity': 'critical',
+          'createdAt': DateTime.now().subtract(const Duration(minutes: 15)).toIso8601String(),
+          'readAt': null,
+          'data': {
+            'actionUrl': '/activity',
+            'bodyTemperature': 40.2,
+            'threshold': 39.5,
+          }
+        },
+        {
+          'id': 'test_alert_5_${DateTime.now().millisecondsSinceEpoch}',
+          'title': '📊 Utilisation quotidienne élevée',
+          'message': 'Le chat a utilisé la litière 12 fois aujourd\'hui. Surveillez son comportement.',
+          'category': 'litter',
+          'type': 'LITTER',
+          'severity': 'info',
+          'createdAt': DateTime.now().subtract(const Duration(minutes: 20)).toIso8601String(),
+          'readAt': null,
+          'data': {
+            'actionUrl': '/litter',
+            'dailyUsage': 12,
+            'threshold': 10,
+          }
+        }
+      ];
+
+      // Ajouter les alertes mockées à la liste locale
+      if (mounted) {
+        setState(() {
+          _items = [...testAlerts, ..._items];
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: cs.primary,
+            content: const Text('✅ 5 alertes de test générées avec succès !'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        final cs = Theme.of(context).colorScheme;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: cs.error,
+            content: Text('❌ Erreur lors de la génération des alertes: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showTestAlertDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(' Générer des alertes de test'),
+          content: const Text(
+            'Cela va créer 5 notifications de démonstration :\n\n'
+            '• Température élevée\n'
+            '• Humidité litière élevée\n'
+            '• Chat inactif 5h30\n'
+            '• Température corporelle anormale\n'
+            '• Utilisation litière élevée\n\n'
+            'Voulez-vous continuer ?'
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _generateTestAlerts();
+              },
+              child: const Text('Générer'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Note: plus d'auto "lu" à l'ouverture; on marque comme lu au tap.
 
   String _formatTimestamp(DateTime dt) {
@@ -210,6 +353,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           centerTitle: true,
           elevation: 0,
           backgroundColor: theme.scaffoldBackgroundColor,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.science),
+              tooltip: 'Générer des alertes de test',
+              onPressed: _showTestAlertDialog,
+            ),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(48),
             child: Material(

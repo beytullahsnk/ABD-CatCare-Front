@@ -851,7 +851,7 @@ class RealApiService {
               return <String, dynamic>{
                 'dailyUsage': dailyUsage,
                 'cleanliness': humidity.round(),
-                'events': events,
+          'events': events,
                 'anomalies': (item['anomalies'] as List?)?.cast<String>() ?? <String>[],
               };
             }
@@ -897,7 +897,7 @@ class RealApiService {
           break;
         }
       }
-      
+
       if (collarRuuviTagId == null) {
         return [];
       }
